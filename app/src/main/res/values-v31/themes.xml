@@ -1,4 +1,84 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources xmlns:tools="http://schemas.android.com/tools">
-    <!-- TODO: Add API 31+ theme resources -->
+    
+    <!-- Base Application Theme (Light - Android 12+) -->
+    <style name="Base.Theme.LocalPlayerApplication" parent="Theme.Material3.DayNight.NoActionBar">
+        <!-- Enable dynamic colors -->
+        <item name="android:colorPrimary">@android:color/system_accent1_600</item>
+        <item name="android:colorPrimaryContainer">@android:color/system_accent1_100</item>
+        <item name="android:colorSecondary">@android:color/system_accent2_600</item>
+        <item name="android:colorSecondaryContainer">@android:color/system_accent2_100</item>
+        <item name="android:colorTertiary">@android:color/system_accent3_600</item>
+        <item name="android:colorTertiaryContainer">@android:color/system_accent3_100</item>
+        
+        <!-- Material You surface colors -->
+        <item name="android:colorSurface">@android:color/system_neutral1_50</item>
+        <item name="android:colorSurfaceVariant">@android:color/system_neutral2_50</item>
+        <item name="android:colorBackground">@android:color/system_neutral1_10</item>
+        
+        <!-- Enhanced splash screen -->
+        <item name="android:windowSplashScreenBackground">@android:color/system_accent1_600</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/ic_music_note</item>
+        <item name="android:windowSplashScreenAnimationDuration">1000</item>
+        <item name="android:windowSplashScreenIconBackgroundColor">@android:color/system_accent1_100</item>
+        <item name="android:windowSplashScreenBrandingImage">@drawable/app_logo</item>
+        
+        <!-- Status bar styling -->
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:windowLightStatusBar">true</item>
+        
+        <!-- Navigation bar styling -->
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowLightNavigationBar">true</item>
+        
+        <!-- Window insets handling -->
+        <item name="android:windowDrawsSystemBarBackgrounds">true</item>
+        <item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item>
+        <item name="android:enforceNavigationBarContrast">false</item>
+        <item name="android:enforceStatusBarContrast">false</item>
+        
+        <!-- Blur effects -->
+        <item name="android:windowBackgroundBlurRadius" tools:targetApi="s">20dp</item>
+        <item name="android:windowBlurBehindEnabled" tools:targetApi="s">true</item>
+    </style>
+    
+    <!-- Main Application Theme (Android 12+) -->
+    <style name="Theme.LocalPlayerApplication" parent="Base.Theme.LocalPlayerApplication">
+        <!-- Material You color tokens -->
+        <item name="colorPrimary">@android:color/system_accent1_600</item>
+        <item name="colorOnPrimary">@android:color/system_accent1_0</item>
+        <item name="colorPrimaryContainer">@android:color/system_accent1_100</item>
+        <item name="colorOnPrimaryContainer">@android:color/system_accent1_900</item>
+        
+        <item name="colorSecondary">@android:color/system_accent2_600</item>
+        <item name="colorOnSecondary">@android:color/system_accent2_0</item>
+        <item name="colorSecondaryContainer">@android:color/system_accent2_100</item>
+        <item name="colorOnSecondaryContainer">@android:color/system_accent2_900</item>
+        
+        <item name="colorTertiary">@android:color/system_accent3_600</item>
+        <item name="colorOnTertiary">@android:color/system_accent3_0</item>
+        <item name="colorTertiaryContainer">@android:color/system_accent3_100</item>
+        <item name="colorOnTertiaryContainer">@android:color/system_accent3_900</item>
+        
+        <!-- Surface colors -->
+        <item name="colorSurface">@android:color/system_neutral1_50</item>
+        <item name="colorOnSurface">@android:color/system_neutral1_900</item>
+        <item name="colorSurfaceVariant">@android:color/system_neutral2_50</item>
+        <item name="colorOnSurfaceVariant">@android:color/system_neutral2_700</item>
+        
+        <!-- Background colors -->
+        <item name="android:colorBackground">@android:color/system_neutral1_10</item>
+        <item name="colorOnBackground">@android:color/system_neutral1_900</item>
+        
+        <!-- Error colors -->
+        <item name="colorError">@android:color/system_error_600</item>
+        <item name="colorOnError">@android:color/system_error_0</item>
+        <item name="colorErrorContainer">@android:color/system_error_100</item>
+        <item name="colorOnErrorContainer">@android:color/system_error_900</item>
+        
+        <!-- Outline colors -->
+        <item name="colorOutline">@android:color/system_neutral_variant_500</item>
+        <item name="colorOutlineVariant">@android:color/system_neutral_variant_300</item>
+    </style>
+    
 </resources>

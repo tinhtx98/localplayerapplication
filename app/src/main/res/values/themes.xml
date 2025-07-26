@@ -1,4 +1,192 @@
 <?xml version="1.0" encoding="utf-8"?>
-<resources>
-    <style name="Theme.LocalPlayerApplication" parent="android:Theme.Material.Light.NoActionBar" />
+<resources xmlns:tools="http://schemas.android.com/tools">
+    
+    <!-- Base Application Theme (Light) -->
+    <style name="Base.Theme.LocalPlayerApplication" parent="Theme.Material3.DayNight">
+        <!-- Primary colors -->
+        <item name="colorPrimary">@color/primary</item>
+        <item name="colorOnPrimary">@color/on_primary</item>
+        <item name="colorPrimaryContainer">@color/primary_light</item>
+        <item name="colorOnPrimaryContainer">@color/on_primary</item>
+        
+        <!-- Secondary colors -->
+        <item name="colorSecondary">@color/secondary</item>
+        <item name="colorOnSecondary">@color/on_secondary</item>
+        <item name="colorSecondaryContainer">@color/secondary_light</item>
+        <item name="colorOnSecondaryContainer">@color/on_secondary</item>
+        
+        <!-- Surface colors -->
+        <item name="colorSurface">@color/surface</item>
+        <item name="colorOnSurface">@color/on_surface</item>
+        <item name="colorSurfaceVariant">@color/surface_variant</item>
+        <item name="colorOnSurfaceVariant">@color/on_surface_variant</item>
+        
+        <!-- Background colors -->
+        <item name="android:colorBackground">@color/background</item>
+        <item name="colorOnBackground">@color/on_background</item>
+        
+        <!-- Error colors -->
+        <item name="colorError">@color/error</item>
+        <item name="colorOnError">@color/on_error</item>
+        <item name="colorErrorContainer">@color/error</item>
+        <item name="colorOnErrorContainer">@color/on_error</item>
+        
+        <!-- Outline colors -->
+        <item name="colorOutline">@color/border</item>
+        <item name="colorOutlineVariant">@color/divider</item>
+        
+        <!-- Status bar -->
+        <item name="android:statusBarColor">@color/primary_dark</item>
+        <item name="android:windowLightStatusBar">false</item>
+        
+        <!-- Navigation bar -->
+        <item name="android:navigationBarColor">@color/surface</item>
+        <item name="android:windowLightNavigationBar">true</item>
+        
+        <!-- Window flags -->
+        <item name="android:windowDrawsSystemBarBackgrounds">true</item>
+    </style>
+    
+    <!-- Main Application Theme -->
+    <style name="Theme.LocalPlayerApplication" parent="Base.Theme.LocalPlayerApplication">
+        <!-- Typography -->
+        <item name="textAppearanceDisplayLarge">@style/TextAppearance.LocalPlayer.DisplayLarge</item>
+        <item name="textAppearanceDisplayMedium">@style/TextAppearance.LocalPlayer.DisplayMedium</item>
+        <item name="textAppearanceDisplaySmall">@style/TextAppearance.LocalPlayer.DisplaySmall</item>
+        <item name="textAppearanceHeadlineLarge">@style/TextAppearance.LocalPlayer.HeadlineLarge</item>
+        <item name="textAppearanceHeadlineMedium">@style/TextAppearance.LocalPlayer.HeadlineMedium</item>
+        <item name="textAppearanceHeadlineSmall">@style/TextAppearance.LocalPlayer.HeadlineSmall</item>
+        <item name="textAppearanceTitleLarge">@style/TextAppearance.LocalPlayer.TitleLarge</item>
+        <item name="textAppearanceTitleMedium">@style/TextAppearance.LocalPlayer.TitleMedium</item>
+        <item name="textAppearanceTitleSmall">@style/TextAppearance.LocalPlayer.TitleSmall</item>
+        <item name="textAppearanceBodyLarge">@style/TextAppearance.LocalPlayer.BodyLarge</item>
+        <item name="textAppearanceBodyMedium">@style/TextAppearance.LocalPlayer.BodyMedium</item>
+        <item name="textAppearanceBodySmall">@style/TextAppearance.LocalPlayer.BodySmall</item>
+        <item name="textAppearanceLabelLarge">@style/TextAppearance.LocalPlayer.LabelLarge</item>
+        <item name="textAppearanceLabelMedium">@style/TextAppearance.LocalPlayer.LabelMedium</item>
+        <item name="textAppearanceLabelSmall">@style/TextAppearance.LocalPlayer.LabelSmall</item>
+        
+        <!-- Shape theming -->
+        <item name="shapeAppearanceCornerExtraLarge">@style/ShapeAppearance.LocalPlayer.CornerExtraLarge</item>
+        <item name="shapeAppearanceCornerLarge">@style/ShapeAppearance.LocalPlayer.CornerLarge</item>
+        <item name="shapeAppearanceCornerMedium">@style/ShapeAppearance.LocalPlayer.CornerMedium</item>
+        <item name="shapeAppearanceCornerSmall">@style/ShapeAppearance.LocalPlayer.CornerSmall</item>
+        <item name="shapeAppearanceCornerExtraSmall">@style/ShapeAppearance.LocalPlayer.CornerExtraSmall</item>
+    </style>
+    
+    <!-- Splash Screen Theme -->
+    <style name="Theme.LocalPlayerApplication.SplashScreen" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/primary</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_music_note</item>
+        <item name="windowSplashScreenAnimationDuration">1000</item>
+        <item name="postSplashScreenTheme">@style/Theme.LocalPlayerApplication</item>
+    </style>
+    
+    <!-- Player Theme (Full Screen) -->
+    <style name="Theme.LocalPlayerApplication.Player" parent="Theme.LocalPlayerApplication">
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowTranslucentStatus">true</item>
+        <item name="android:windowTranslucentNavigation">true</item>
+        <item name="android:windowDrawsSystemBarBackgrounds">true</item>
+        <item name="android:windowLayoutInDisplayCutoutMode" tools:targetApi="p">shortEdges</item>
+    </style>
+    
+    <!-- Typography Styles -->
+    <style name="TextAppearance.LocalPlayer.DisplayLarge" parent="TextAppearance.Material3.DisplayLarge">
+        <item name="fontFamily">@font/roboto_bold</item>
+        <item name="android:textSize">@dimen/text_size_display_large</item>
+    </style>
+    
+    <style name="TextAppearance.LocalPlayer.DisplayMedium" parent="TextAppearance.Material3.DisplayMedium">
+        <item name="fontFamily">@font/roboto_bold</item>
+        <item name="android:textSize">@dimen/text_size_display_medium</item>
+    </style>
+    
+    <style name="TextAppearance.LocalPlayer.DisplaySmall" parent="TextAppearance.Material3.DisplaySmall">
+        <item name="fontFamily">@font/roboto_bold</item>
+        <item name="android:textSize">@dimen/text_size_display_small</item>
+    </style>
+    
+    <style name="TextAppearance.LocalPlayer.HeadlineLarge" parent="TextAppearance.Material3.HeadlineLarge">
+        <item name="fontFamily">@font/roboto_medium</item>
+        <item name="android:textSize">@dimen/text_size_headline_large</item>
+    </style>
+    
+    <style name="TextAppearance.LocalPlayer.HeadlineMedium" parent="TextAppearance.Material3.HeadlineMedium">
+        <item name="fontFamily">@font/roboto_medium</item>
+        <item name="android:textSize">@dimen/text_size_headline_medium</item>
+    </style>
+    
+    <style name="TextAppearance.LocalPlayer.HeadlineSmall" parent="TextAppearance.Material3.HeadlineSmall">
+        <item name="fontFamily">@font/roboto_medium</item>
+        <item name="android:textSize">@dimen/text_size_headline_small</item>
+    </style>
+    
+    <style name="TextAppearance.LocalPlayer.TitleLarge" parent="TextAppearance.Material3.TitleLarge">
+        <item name="fontFamily">@font/roboto_medium</item>
+        <item name="android:textSize">@dimen/text_size_title_large</item>
+    </style>
+    
+    <style name="TextAppearance.LocalPlayer.TitleMedium" parent="TextAppearance.Material3.TitleMedium">
+        <item name="fontFamily">@font/roboto_medium</item>
+        <item name="android:textSize">@dimen/text_size_title_medium</item>
+    </style>
+    
+    <style name="TextAppearance.LocalPlayer.TitleSmall" parent="TextAppearance.Material3.TitleSmall">
+        <item name="fontFamily">@font/roboto_medium</item>
+        <item name="android:textSize">@dimen/text_size_title_small</item>
+    </style>
+    
+    <style name="TextAppearance.LocalPlayer.BodyLarge" parent="TextAppearance.Material3.BodyLarge">
+        <item name="fontFamily">@font/roboto_regular</item>
+        <item name="android:textSize">@dimen/text_size_body_large</item>
+    </style>
+    
+    <style name="TextAppearance.LocalPlayer.BodyMedium" parent="TextAppearance.Material3.BodyMedium">
+        <item name="fontFamily">@font/roboto_regular</item>
+        <item name="android:textSize">@dimen/text_size_body_medium</item>
+    </style>
+    
+    <style name="TextAppearance.LocalPlayer.BodySmall" parent="TextAppearance.Material3.BodySmall">
+        <item name="fontFamily">@font/roboto_regular</item>
+        <item name="android:textSize">@dimen/text_size_body_small</item>
+    </style>
+    
+    <style name="TextAppearance.LocalPlayer.LabelLarge" parent="TextAppearance.Material3.LabelLarge">
+        <item name="fontFamily">@font/roboto_medium</item>
+        <item name="android:textSize">@dimen/text_size_label_large</item>
+    </style>
+    
+    <style name="TextAppearance.LocalPlayer.LabelMedium" parent="TextAppearance.Material3.LabelMedium">
+        <item name="fontFamily">@font/roboto_medium</item>
+        <item name="android:textSize">@dimen/text_size_label_medium</item>
+    </style>
+    
+    <style name="TextAppearance.LocalPlayer.LabelSmall" parent="TextAppearance.Material3.LabelSmall">
+        <item name="fontFamily">@font/roboto_medium</item>
+        <item name="android:textSize">@dimen/text_size_label_small</item>
+    </style>
+    
+    <!-- Shape Styles -->
+    <style name="ShapeAppearance.LocalPlayer.CornerExtraLarge" parent="ShapeAppearance.Material3.Corner.ExtraLarge">
+        <item name="cornerSize">@dimen/corner_radius_extra_large</item>
+    </style>
+    
+    <style name="ShapeAppearance.LocalPlayer.CornerLarge" parent="ShapeAppearance.Material3.Corner.Large">
+        <item name="cornerSize">@dimen/corner_radius_large</item>
+    </style>
+    
+    <style name="ShapeAppearance.LocalPlayer.CornerMedium" parent="ShapeAppearance.Material3.Corner.Medium">
+        <item name="cornerSize">@dimen/corner_radius_medium</item>
+    </style>
+    
+    <style name="ShapeAppearance.LocalPlayer.CornerSmall" parent="ShapeAppearance.Material3.Corner.Small">
+        <item name="cornerSize">@dimen/corner_radius_small</item>
+    </style>
+    
+    <style name="ShapeAppearance.LocalPlayer.CornerExtraSmall" parent="ShapeAppearance.Material3.Corner.ExtraSmall">
+        <item name="cornerSize">@dimen/corner_radius_extra_small</item>
+    </style>
+    
 </resources>

@@ -1,4 +1,240 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- TODO: Add night mode color resources -->
+    <!-- Primary Colors - Dark Theme -->
+    <color name="primary">#64B5F6</color>
+    <color name="primary_dark">#42A5F5</color>
+    <color name="primary_light">#90CAF9</color>
+    <color name="primary_variant">#2196F3</color>
+    
+    <!-- Secondary Colors - Dark Theme -->
+    <color name="secondary">#FF80AB</color>
+    <color name="secondary_dark">#FF4081</color>
+    <color name="secondary_light">#FFCDD2</color>
+    <color name="secondary_variant">#FF5722</color>
+    
+    <!-- Background & Surface Colors - Dark Theme -->
+    <color name="background">#121212</color>
+    <color name="background_dark">#000000</color>
+    <color name="surface">#1E1E1E</color>
+    <color name="surface_dark">#121212</color>
+    <color name="surface_variant">#2A2A2A</color>
+    <color name="surface_variant_dark">#1A1A1A</color>
+    
+    <!-- Text Colors - Dark Theme -->
+    <color name="on_primary">#000000</color>
+    <color name="on_secondary">#000000</color>
+    <color name="on_background">#E0E0E0</color>
+    <color name="on_background_dark">#FFFFFF</color>
+    <color name="on_surface">#E0E0E0</color>
+    <color name="on_surface_dark">#FFFFFF</color>
+    <color name="on_surface_variant">#BDBDBD</color>
+    <color name="on_surface_variant_dark">#9E9E9E</color>
+    
+    <!-- State Colors - Dark Theme -->
+    <color name="error">#CF6679</color>
+    <color name="error_dark">#F28B82</color>
+    <color name="on_error">#000000</color>
+    <color name="success">#81C784</color>
+    <color name="success_dark">#A5D6A7</color>
+    <color name="warning">#FFB74D</color>
+    <color name="warning_dark">#FFCC02</color>
+    <color name="info">#64B5F6</color>
+    <color name="info_dark">#90CAF9</color>
+    
+    <!-- Music Player Specific Colors - Dark Theme -->
+    <color name="player_background">#000000</color>
+    <color name="player_background_gradient_start">#1A1A1A</color>
+    <color name="player_background_gradient_end">#000000</color>
+    <color name="player_controls">#FFFFFF</color>
+    <color name="player_controls_inactive">#757575</color>
+    <color name="progress_bar">#64B5F6</color>
+    <color name="progress_bar_background">#424242</color>
+    <color name="progress_bar_background_dark">#2A2A2A</color>
+    
+    <!-- Album Art & Media Colors - Dark Theme -->
+    <color name="album_art_placeholder">#424242</color>
+    <color name="album_art_placeholder_dark">#2A2A2A</color>
+    <color name="album_art_background">#1E1E1E</color>
+    <color name="album_art_shadow">#80000000</color>
+    <color name="media_button_background">#40FFFFFF</color>
+    <color name="media_button_background_pressed">#60FFFFFF</color>
+    
+    <!-- Navigation & Bottom Bar - Dark Theme -->
+    <color name="bottom_nav_background">#1E1E1E</color>
+    <color name="bottom_nav_background_dark">#121212</color>
+    <color name="bottom_nav_selected">#64B5F6</color>
+    <color name="bottom_nav_unselected">#757575</color>
+    <color name="bottom_nav_unselected_dark">#616161</color>
+    
+    <!-- Card & Item Colors - Dark Theme -->
+    <color name="card_background">#2A2A2A</color>
+    <color name="card_background_dark">#1E1E1E</color>
+    <color name="card_elevation">#40000000</color>
+    <color name="card_stroke">#424242</color>
+    <color name="card_stroke_dark">#2A2A2A</color>
+    <color name="item_selected">#1A237E</color>
+    <color name="item_selected_dark">#0D47A1</color>
+    <color name="item_ripple">#40FFFFFF</color>
+    <color name="item_ripple_dark">#60FFFFFF</color>
+    
+    <!-- Divider & Border Colors - Dark Theme -->
+    <color name="divider">#424242</color>
+    <color name="divider_dark">#2A2A2A</color>
+    <color name="border">#616161</color>
+    <color name="border_dark">#424242</color>
+    
+    <!-- Overlay & Scrim Colors - Dark Theme -->
+    <color name="overlay_light">#40FFFFFF</color>
+    <color name="overlay_dark">#80000000</color>
+    <color name="scrim">#80000000</color>
+    <color name="scrim_light">#60FFFFFF</color>
+    
+    <!-- Notification Colors - Dark Theme -->
+    <color name="notification_background">#1E1E1E</color>
+    <color name="notification_background_dark">#121212</color>
+    <color name="notification_accent">#64B5F6</color>
+    
+    <!-- Genre & Category Colors - Dark Theme (Slightly Desaturated) -->
+    <color name="genre_rock">#F06292</color>
+    <color name="genre_pop">#BA68C8</color>
+    <color name="genre_jazz">#9575CD</color>
+    <color name="genre_classical">#7986CB</color>
+    <color name="genre_electronic">#64B5F6</color>
+    <color name="genre_folk">#4DB6AC</color>
+    <color name="genre_country">#81C784</color>
+    <color name="genre_r_and_b">#AED581</color>
+    <color name="genre_hip_hop">#DCE775</color>
+    <color name="genre_alternative">#FFF176</color>
+    <color name="genre_indie">#FFD54F</color>
+    <color name="genre_metal">#FFB74D</color>
+    <color name="genre_punk">#FF8A65</color>
+    <color name="genre_blues">#A1887F</color>
+    <color name="genre_reggae">#90A4AE</color>
+    <color name="genre_world">#BDBDBD</color>
+    
+    <!-- Gradient Colors - Dark Theme -->
+    <color name="gradient_start">#64B5F6</color>
+    <color name="gradient_middle">#42A5F5</color>
+    <color name="gradient_end">#2196F3</color>
+    <color name="gradient_dark_start">#1976D2</color>
+    <color name="gradient_dark_middle">#1565C0</color>
+    <color name="gradient_dark_end">#0D47A1</color>
+    
+    <!-- Favorites & Rating Colors - Dark Theme -->
+    <color name="favorite_active">#F48FB1</color>
+    <color name="favorite_inactive">#757575</color>
+    <color name="rating_active">#FFD54F</color>
+    <color name="rating_inactive">#757575</color>
+    
+    <!-- Playback State Colors - Dark Theme -->
+    <color name="playing_indicator">#81C784</color>
+    <color name="paused_indicator">#FFB74D</color>
+    <color name="stopped_indicator">#9E9E9E</color>
+    <color name="buffering_indicator">#64B5F6</color>
+    <color name="error_indicator">#F48FB1</color>
+    
+    <!-- Equalizer Colors - Dark Theme -->
+    <color name="equalizer_bar">#64B5F6</color>
+    <color name="equalizer_bar_inactive">#757575</color>
+    <color name="equalizer_background">#2A2A2A</color>
+    <color name="equalizer_background_dark">#1E1E1E</color>
+    
+    <!-- Search & Filter Colors - Dark Theme -->
+    <color name="search_background">#2A2A2A</color>
+    <color name="search_background_dark">#1E1E1E</color>
+    <color name="search_hint">#757575</color>
+    <color name="filter_active">#64B5F6</color>
+    <color name="filter_inactive">#757575</color>
+    
+    <!-- Material Design Theme Colors (Dark) -->
+    <color name="purple_200">#FFBB86FC</color>
+    <color name="purple_500">#FF6200EE</color>
+    <color name="purple_700">#FF3700B3</color>
+    <color name="teal_200">#FF03DAC5</color>
+    <color name="teal_700">#FF018786</color>
+    <color name="black">#FF000000</color>
+    <color name="white">#FFFFFFFF</color>
+    <color name="transparent">#00000000</color>
+    
+    <!-- Accent Colors for Different Themes - Dark Mode -->
+    <color name="accent_blue">#64B5F6</color>
+    <color name="accent_green">#81C784</color>
+    <color name="accent_orange">#FFB74D</color>
+    <color name="accent_purple">#BA68C8</color>
+    <color name="accent_red">#F48FB1</color>
+    <color name="accent_pink">#F06292</color>
+    <color name="accent_teal">#4DB6AC</color>
+    <color name="accent_indigo">#7986CB</color>
+    
+    <!-- Shimmer Effect Colors - Dark Theme -->
+    <color name="shimmer_base">#2A2A2A</color>
+    <color name="shimmer_highlight">#3A3A3A</color>
+    <color name="shimmer_base_dark">#1E1E1E</color>
+    <color name="shimmer_highlight_dark">#2A2A2A</color>
+    
+    <!-- Additional Dark Theme Specific Colors -->
+    <color name="dark_surface_1">#1E1E1E</color>
+    <color name="dark_surface_2">#2A2A2A</color>
+    <color name="dark_surface_3">#363636</color>
+    <color name="dark_surface_4">#424242</color>
+    <color name="dark_surface_5">#4E4E4E</color>
+    
+    <!-- Text Colors with Different Emphasis - Dark Theme -->
+    <color name="text_high_emphasis">#FFFFFF</color>
+    <color name="text_medium_emphasis">#E0E0E0</color>
+    <color name="text_disabled">#9E9E9E</color>
+    
+    <!-- Icon Colors - Dark Theme -->
+    <color name="icon_primary">#FFFFFF</color>
+    <color name="icon_secondary">#BDBDBD</color>
+    <color name="icon_disabled">#757575</color>
+    <color name="icon_accent">#64B5F6</color>
+    
+    <!-- Music Visualizer Colors - Dark Theme -->
+    <color name="visualizer_bar_1">#64B5F6</color>
+    <color name="visualizer_bar_2">#42A5F5</color>
+    <color name="visualizer_bar_3">#2196F3</color>
+    <color name="visualizer_bar_4">#1976D2</color>
+    <color name="visualizer_bar_5">#1565C0</color>
+    
+    <!-- Playlist Colors - Dark Theme -->
+    <color name="playlist_created">#81C784</color>
+    <color name="playlist_smart">#64B5F6</color>
+    <color name="playlist_favorite">#F48FB1</color>
+    <color name="playlist_recent">#FFB74D</color>
+    
+    <!-- Artist Colors - Dark Theme -->
+    <color name="artist_verified">#64B5F6</color>
+    <color name="artist_popular">#FFD54F</color>
+    <color name="artist_local">#BDBDBD</color>
+    
+    <!-- Album Colors - Dark Theme -->
+    <color name="album_new">#81C784</color>
+    <color name="album_popular">#FFB74D</color>
+    <color name="album_compilation">#BA68C8</color>
+    
+    <!-- Sleep Timer Colors - Dark Theme -->
+    <color name="sleep_timer_active">#FFB74D</color>
+    <color name="sleep_timer_inactive">#757575</color>
+    <color name="sleep_timer_warning">#F48FB1</color>
+    
+    <!-- Cast Colors - Dark Theme -->
+    <color name="cast_connected">#81C784</color>
+    <color name="cast_connecting">#FFB74D</color>
+    <color name="cast_disconnected">#757575</color>
+    
+    <!-- Queue Colors - Dark Theme -->
+    <color name="queue_current">#64B5F6</color>
+    <color name="queue_next">#BDBDBD</color>
+    <color name="queue_previous">#757575</color>
+    
+    <!-- Crossfade Colors - Dark Theme -->
+    <color name="crossfade_active">#64B5F6</color>
+    <color name="crossfade_inactive">#757575</color>
+    
+    <!-- Audio Quality Colors - Dark Theme -->
+    <color name="quality_lossless">#81C784</color>
+    <color name="quality_high">#64B5F6</color>
+    <color name="quality_medium">#FFB74D</color>
+    <color name="quality_low">#F48FB1</color>
 </resources>
