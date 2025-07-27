@@ -3,453 +3,573 @@ package com.tinhtx.localplayerapplication.presentation.screens.playlist
 import androidx.compose.animation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
-import androidx.compose.material3.windowsizeclass.WindowSizeClass
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.google.accompanist.swiperefresh.SwipeRefresh
+import com.google.accompanist.swiperefresh.rememberSwipeRefreshState
 import com.tinhtx.localplayerapplication.domain.model.*
-import com.tinhtx.localplayerapplication.presentation.components.common.*
-import com.tinhtx.localplayerapplication.presentation.components.music.*
-import com.tinhtx.localplayerapplication.presentation.components.ui.MusicTopAppBar
 import com.tinhtx.localplayerapplication.presentation.screens.playlist.components.*
-import com.tinhtx.localplayerapplication.presentation.theme.getHorizontalPadding
 
+/**
+ * Playlists Screen - Danh sách tất cả playlists
+ * Maps với PlaylistViewModel và PlaylistUiState
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun PlaylistScreen(
-    playlistId: Long,
+fun PlaylistsScreen(
     onNavigateBack: () -> Unit,
-    onNavigateToPlayer: () -> Unit,
-    onNavigateToSearch: () -> Unit,
-    windowSizeClass: WindowSizeClass,
+    onNavigateToPlaylistDetail: (Playlist) -> Unit,
+    onNavigateToPlayer: (Song) -> Unit,
     modifier: Modifier = Modifier,
     viewModel: PlaylistViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
-    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     val listState = rememberLazyListState()
 
-    var showEditDialog by remember { mutableStateOf(false) }
-    var showDeleteDialog by remember { mutableStateOf(false) }
-    var showAddSongsBottomSheet by remember { mutableStateOf(false) }
-    var showSortDialog by remember { mutableStateOf(false) }
-
-    LaunchedEffect(playlistId) {
-        viewModel.loadPlaylist(playlistId)
+    // Handle navigation side effects
+    LaunchedEffect(uiState.selectedPlaylistForNavigation) {
+        uiState.selectedPlaylistForNavigation?.let { playlist ->
+            onNavigateToPlaylistDetail(playlist)
+            viewModel.clearNavigationStates()
+        }
     }
 
-    Scaffold(
-        modifier = modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
-        topBar = {
-            MusicTopAppBar(
-                title = uiState.playlist?.name ?: "Playlist",
-                subtitle = uiState.playlist?.let { "${it.songCount} songs • ${it.formattedDuration}" },
-                navigationIcon = Icons.Default.ArrowBack,
-                onNavigationClick = onNavigateBack,
-                scrollBehavior = scrollBehavior,
-                actions = {
-                    if (uiState.playlist != null) {
-                        // Search in playlist
-                        IconButton(onClick = { viewModel.toggleSearchMode() }) {
-                            Icon(
-                                imageVector = if (uiState.isSearching) Icons.Default.Close else Icons.Default.Search,
-                                contentDescription = if (uiState.isSearching) "Close search" else "Search in playlist"
-                            )
-                        }
-
-                        // Sort songs
-                        IconButton(onClick = { showSortDialog = true }) {
-                            Icon(
-                                imageVector = Icons.Default.Sort,
-                                contentDescription = "Sort songs"
-                            )
-                        }
-
-                        // More options
-                        var showMenu by remember { mutableStateOf(false) }
-                        Box {
-                            IconButton(onClick = { showMenu = true }) {
-                                Icon(
-                                    imageVector = Icons.Default.MoreVert,
-                                    contentDescription = "More options"
-                                )
-                            }
-
-                            DropdownMenu(
-                                expanded = showMenu,
-                                onDismissRequest = { showMenu = false }
-                            ) {
-                                DropdownMenuItem(
-                                    text = { Text("Play all") },
-                                    onClick = {
-                                        showMenu = false
-                                        viewModel.playAllSongs()
-                                        onNavigateToPlayer()
-                                    },
-                                    leadingIcon = {
-                                        Icon(Icons.Default.PlayArrow, contentDescription = null)
-                                    }
-                                )
-                                DropdownMenuItem(
-                                    text = { Text("Shuffle play") },
-                                    onClick = {
-                                        showMenu = false
-                                        viewModel.shufflePlaylist()
-                                        onNavigateToPlayer()
-                                    },
-                                    leadingIcon = {
-                                        Icon(Icons.Default.Shuffle, contentDescription = null)
-                                    }
-                                )
-                                DropdownMenuItem(
-                                    text = { Text("Add songs") },
-                                    onClick = {
-                                        showMenu = false
-                                        showAddSongsBottomSheet = true
-                                    },
-                                    leadingIcon = {
-                                        Icon(Icons.Default.Add, contentDescription = null)
-                                    }
-                                )
-                                HorizontalDivider()
-                                DropdownMenuItem(
-                                    text = { Text("Edit playlist") },
-                                    onClick = {
-                                        showMenu = false
-                                        showEditDialog = true
-                                    },
-                                    leadingIcon = {
-                                        Icon(Icons.Default.Edit, contentDescription = null)
-                                    }
-                                )
-                                DropdownMenuItem(
-                                    text = { Text("Share playlist") },
-                                    onClick = {
-                                        showMenu = false
-                                        viewModel.sharePlaylist()
-                                    },
-                                    leadingIcon = {
-                                        Icon(Icons.Default.Share, contentDescription = null)
-                                    }
-                                )
-                                DropdownMenuItem(
-                                    text = { Text("Export") },
-                                    onClick = {
-                                        showMenu = false
-                                        viewModel.exportPlaylist()
-                                    },
-                                    leadingIcon = {
-                                        Icon(Icons.Default.Download, contentDescription = null)
-                                    }
-                                )
-                                HorizontalDivider()
-                                DropdownMenuItem(
-                                    text = { Text("Delete playlist", color = MaterialTheme.colorScheme.error) },
-                                    onClick = {
-                                        showMenu = false
-                                        showDeleteDialog = true
-                                    },
-                                    leadingIcon = {
-                                        Icon(
-                                            Icons.Default.Delete,
-                                            contentDescription = null,
-                                            tint = MaterialTheme.colorScheme.error
-                                        )
-                                    }
-                                )
-                            }
-                        }
-                    }
-                }
-            )
-        },
-        floatingActionButton = {
-            if (uiState.playlist != null && uiState.songs.isNotEmpty() && !uiState.isSearching) {
-                ExtendedFloatingActionButton(
-                    onClick = {
-                        viewModel.playAllSongs()
-                        onNavigateToPlayer()
-                    },
-                    icon = {
-                        Icon(
-                            imageVector = Icons.Default.PlayArrow,
-                            contentDescription = null
-                        )
-                    },
-                    text = { Text("Play All") },
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    contentColor = MaterialTheme.colorScheme.onPrimary
-                )
-            }
+    // Handle error auto-dismiss
+    LaunchedEffect(uiState.error) {
+        if (uiState.error != null) {
+            kotlinx.coroutines.delay(5000)
+            viewModel.clearError()
         }
-    ) { paddingValues ->
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
+    }
+
+    // Handle selection mode back gesture
+    BackHandler(enabled = uiState.playlistsSelectionMode) {
+        viewModel.clearPlaylistsSelection()
+    }
+
+    Box(modifier = modifier.fillMaxSize()) {
+        SwipeRefresh(
+            state = rememberSwipeRefreshState(uiState.isRefreshing),
+            onRefresh = viewModel::refreshAll,
+            modifier = Modifier.fillMaxSize()
         ) {
-            when {
-                uiState.isLoading -> {
-                    FullScreenLoadingIndicator(
-                        message = "Loading playlist...",
-                        showBackground = false
-                    )
-                }
-                uiState.error != null -> {
-                    MusicErrorMessage(
-                        title = "Unable to load playlist",
-                        message = uiState.error,
-                        onRetry = { viewModel.retryLoadPlaylist() },
-                        errorType = MusicErrorType.GENERAL,
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(16.dp)
-                    )
-                }
-                uiState.playlist == null -> {
-                    PlaylistNotFoundState(
-                        onNavigateBack = onNavigateBack,
-                        modifier = Modifier.fillMaxSize()
-                    )
-                }
-                else -> {
-                    PlaylistContent(
-                        uiState = uiState,
-                        windowSizeClass = windowSizeClass,
-                        listState = listState,
-                        onSongClick = { song ->
-                            viewModel.playSong(song)
-                            onNavigateToPlayer()
-                        },
-                        onFavoriteClick = { song ->
-                            viewModel.toggleFavorite(song)
-                        },
-                        onRemoveFromPlaylistClick = { song ->
-                            viewModel.removeSongFromPlaylist(song)
-                        },
-                        onSearchQueryChange = { query ->
-                            viewModel.updateSearchQuery(query)
-                        },
-                        onAddSongsClick = {
-                            showAddSongsBottomSheet = true
+            Column(modifier = Modifier.fillMaxSize()) {
+                // Top app bar
+                PlaylistsTopBar(
+                    isSelectionMode = uiState.playlistsSelectionMode,
+                    selectedCount = uiState.selectedPlaylistsCount,
+                    onNavigateBack = onNavigateBack,
+                    onCreatePlaylist = viewModel::toggleCreatePlaylistDialog,
+                    onToggleSelectionMode = viewModel::togglePlaylistsSelectionMode,
+                    onSelectAll = viewModel::selectAllPlaylists,
+                    onClearSelection = viewModel::clearPlaylistsSelection,
+                    onDeleteSelected = viewModel::deleteSelectedPlaylists
+                )
+
+                when {
+                    uiState.playlistsLoading -> {
+                        PlaylistsLoadingState(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .weight(1f)
+                        )
+                    }
+
+                    uiState.playlistsError != null -> {
+                        PlaylistsErrorState(
+                            error = uiState.playlistsError,
+                            onRetry = viewModel::loadAllPlaylists,
+                            onDismiss = viewModel::clearError,
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .weight(1f)
+                        )
+                    }
+
+                    uiState.playlistsEmpty -> {
+                        EmptyPlaylistState(
+                            onCreatePlaylist = viewModel::toggleCreatePlaylistDialog,
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .weight(1f)
+                        )
+                    }
+
+                    uiState.hasPlaylists -> {
+                        // Search bar (only show if not in selection mode)
+                        if (!uiState.playlistsSelectionMode) {
+                            PlaylistSearchBar(
+                                searchQuery = uiState.playlistsSearchQuery,
+                                onSearchQueryChanged = viewModel::searchPlaylists,
+                                isSearchActive = uiState.playlistsSearchActive,
+                                onActiveChanged = { isActive ->
+                                    if (!isActive) viewModel.clearPlaylistsSearch()
+                                },
+                                totalCount = uiState.playlists.size,
+                                filteredCount = uiState.playlistsSearchResultsCount,
+                                onSortClick = { /* TODO: Implement sort dialog */ },
+                                onViewModeClick = { /* TODO: Implement view mode dialog */ },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp, vertical = 8.dp)
+                            )
                         }
-                    )
+
+                        // Playlists content
+                        when (uiState.playlistsViewMode) {
+                            PlaylistsViewMode.LIST -> {
+                                PlaylistsList(
+                                    playlists = uiState.filteredPlaylists,
+                                    isSelectionMode = uiState.playlistsSelectionMode,
+                                    selectedPlaylists = uiState.selectedPlaylists,
+                                    onPlaylistClick = { playlist ->
+                                        if (uiState.playlistsSelectionMode) {
+                                            viewModel.togglePlaylistSelection(playlist.id)
+                                        } else {
+                                            viewModel.navigateToPlaylistDetail(playlist)
+                                        }
+                                    },
+                                    onPlaylistLongClick = { playlist ->
+                                        if (!uiState.playlistsSelectionMode) {
+                                            viewModel.togglePlaylistsSelectionMode()
+                                        }
+                                        viewModel.togglePlaylistSelection(playlist.id)
+                                    },
+                                    onToggleSelection = viewModel::togglePlaylistSelection,
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .weight(1f)
+                                )
+                            }
+
+                            PlaylistsViewMode.GRID -> {
+                                PlaylistsGrid(
+                                    playlists = uiState.filteredPlaylists,
+                                    isSelectionMode = uiState.playlistsSelectionMode,
+                                    selectedPlaylists = uiState.selectedPlaylists,
+                                    onPlaylistClick = { playlist ->
+                                        if (uiState.playlistsSelectionMode) {
+                                            viewModel.togglePlaylistSelection(playlist.id)
+                                        } else {
+                                            viewModel.navigateToPlaylistDetail(playlist)
+                                        }
+                                    },
+                                    onPlaylistLongClick = { playlist ->
+                                        if (!uiState.playlistsSelectionMode) {
+                                            viewModel.togglePlaylistsSelectionMode()
+                                        }
+                                        viewModel.togglePlaylistSelection(playlist.id)
+                                    },
+                                    onToggleSelection = viewModel::togglePlaylistSelection,
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .weight(1f)
+                                )
+                            }
+
+                            PlaylistsViewMode.COMPACT -> {
+                                // TODO: Implement compact view
+                                PlaylistsList(
+                                    playlists = uiState.filteredPlaylists,
+                                    isSelectionMode = uiState.playlistsSelectionMode,
+                                    selectedPlaylists = uiState.selectedPlaylists,
+                                    onPlaylistClick = { playlist ->
+                                        if (uiState.playlistsSelectionMode) {
+                                            viewModel.togglePlaylistSelection(playlist.id)
+                                        } else {
+                                            viewModel.navigateToPlaylistDetail(playlist)
+                                        }
+                                    },
+                                    onPlaylistLongClick = { playlist ->
+                                        if (!uiState.playlistsSelectionMode) {
+                                            viewModel.togglePlaylistsSelectionMode()
+                                        }
+                                        viewModel.togglePlaylistSelection(playlist.id)
+                                    },
+                                    onToggleSelection = viewModel::togglePlaylistSelection,
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .weight(1f)
+                                )
+                            }
+                        }
+                    }
                 }
             }
         }
-    }
 
-    // Dialogs and Bottom Sheets
-    if (showEditDialog && uiState.playlist != null) {
-        EditPlaylistDialog(
-            playlist = uiState.playlist,
-            onSave = { name, description, coverUri ->
-                viewModel.updatePlaylist(name, description, coverUri)
-                showEditDialog = false
-            },
-            onDismiss = { showEditDialog = false }
-        )
-    }
-
-    if (showDeleteDialog) {
-        ConfirmationDialog(
-            title = "Delete Playlist",
-            message = "Are you sure you want to delete \"${uiState.playlist?.name}\"? This action cannot be undone.",
-            onConfirm = {
-                viewModel.deletePlaylist()
-                showDeleteDialog = false
-                onNavigateBack()
-            },
-            onDismiss = { showDeleteDialog = false },
-            confirmText = "Delete",
-            dismissText = "Cancel",
-            isDestructive = true
-        )
-    }
-
-    if (showAddSongsBottomSheet) {
-        AddSongsBottomSheet(
-            currentPlaylistSongs = uiState.songs,
-            onSongsSelected = { songs ->
-                viewModel.addSongsToPlaylist(songs)
-                showAddSongsBottomSheet = false
-            },
-            onDismiss = { showAddSongsBottomSheet = false }
-        )
-    }
-
-    if (showSortDialog) {
-        PlaylistSortDialog(
-            currentSortOrder = uiState.sortOrder,
-            onSortOrderChange = { sortOrder ->
-                viewModel.updateSortOrder(sortOrder)
-                showSortDialog = false
-            },
-            onDismiss = { showSortDialog = false }
-        )
-    }
-}
-
-@Composable
-private fun PlaylistContent(
-    uiState: PlaylistUiState,
-    windowSizeClass: WindowSizeClass,
-    listState: LazyListState,
-    onSongClick: (Song) -> Unit,
-    onFavoriteClick: (Song) -> Unit,
-    onRemoveFromPlaylistClick: (Song) -> Unit,
-    onSearchQueryChange: (String) -> Unit,
-    onAddSongsClick: () -> Unit
-) {
-    val horizontalPadding = windowSizeClass.getHorizontalPadding()
-    val playlist = uiState.playlist!!
-    val displayedSongs = if (uiState.searchQuery.isBlank()) {
-        uiState.songs
-    } else {
-        uiState.filteredSongs
-    }
-
-    LazyColumn(
-        state = listState,
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(bottom = 100.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp)
-    ) {
-        // Playlist header with cover art and info
-        item {
-            PlaylistHeaderCard(
-                playlist = playlist,
-                onPlayClick = {
-                    if (uiState.songs.isNotEmpty()) {
-                        onSongClick(uiState.songs.first())
-                    }
+        // Create playlist dialog
+        if (uiState.showCreatePlaylistDialog) {
+            CreatePlaylistDialog(
+                playlistName = uiState.newPlaylistName,
+                playlistDescription = uiState.newPlaylistDescription,
+                isCreating = uiState.creatingPlaylist,
+                onNameChanged = viewModel::updateNewPlaylistName,
+                onDescriptionChanged = viewModel::updateNewPlaylistDescription,
+                onConfirm = {
+                    viewModel.createPlaylist(
+                        uiState.newPlaylistName,
+                        uiState.newPlaylistDescription
+                    )
                 },
-                onShuffleClick = {
-                    if (uiState.songs.isNotEmpty()) {
-                        onSongClick(uiState.songs.random())
-                    }
-                },
-                modifier = Modifier.padding(horizontal = horizontalPadding)
+                onDismiss = viewModel::toggleCreatePlaylistDialog
             )
         }
 
-        // Search bar (when active)
-        if (uiState.isSearching) {
-            item {
-                PlaylistSearchBar(
-                    searchQuery = uiState.searchQuery,
-                    onSearchQueryChange = onSearchQueryChange,
-                    modifier = Modifier.padding(horizontal = horizontalPadding, vertical = 8.dp)
-                )
-            }
+        // Undo snackbar
+        AnimatedVisibility(
+            visible = uiState.showUndoSnackbar,
+            enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
+            exit = slideOutVertically(targetOffsetY = { it }) + fadeOut(),
+            modifier = Modifier.align(Alignment.BottomCenter)
+        ) {
+            UndoSnackbar(
+                message = uiState.undoMessage,
+                onUndo = {
+                    // TODO: Implement undo functionality
+                    viewModel.dismissUndoSnackbar()
+                },
+                onDismiss = viewModel::dismissUndoSnackbar,
+                modifier = Modifier.padding(16.dp)
+            )
         }
 
-        // Songs section header
-        if (displayedSongs.isNotEmpty()) {
-            item {
-                PlaylistSongsHeader(
-                    songCount = displayedSongs.size,
-                    totalDuration = uiState.totalDuration,
-                    isSearching = uiState.isSearching,
-                    searchQuery = uiState.searchQuery,
-                    modifier = Modifier.padding(horizontal = horizontalPadding)
-                )
-            }
-
-            // Songs list
-            items(
-                items = displayedSongs,
-                key = { it.id }
-            ) { song ->
-                PlaylistSongItem(
-                    song = song,
-                    position = displayedSongs.indexOf(song) + 1,
-                    onClick = { onSongClick(song) },
-                    onFavoriteClick = { onFavoriteClick(song) },
-                    onRemoveFromPlaylistClick = { onRemoveFromPlaylistClick(song) },
-                    modifier = Modifier
-                        .padding(horizontal = horizontalPadding)
-                        .animateItemPlacement()
-                )
-            }
-        } else {
-            // Empty state
-            item {
-                if (uiState.isSearching && uiState.searchQuery.isNotBlank()) {
-                    PlaylistSearchNoResults(
-                        query = uiState.searchQuery,
-                        modifier = Modifier.padding(32.dp)
-                    )
-                } else {
-                    EmptyPlaylistState(
-                        onAddSongsClick = onAddSongsClick,
-                        modifier = Modifier.padding(32.dp)
-                    )
-                }
-            }
+        // Error snackbar
+        AnimatedVisibility(
+            visible = uiState.error != null,
+            enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
+            exit = slideOutVertically(targetOffsetY = { it }) + fadeOut(),
+            modifier = Modifier.align(Alignment.BottomCenter)
+        ) {
+            ErrorSnackbar(
+                error = uiState.error ?: "",
+                onDismiss = viewModel::clearError,
+                onRetry = viewModel::refreshAll,
+                modifier = Modifier.padding(16.dp)
+            )
         }
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun PlaylistNotFoundState(
+private fun PlaylistsTopBar(
+    isSelectionMode: Boolean,
+    selectedCount: Int,
     onNavigateBack: () -> Unit,
+    onCreatePlaylist: () -> Unit,
+    onToggleSelectionMode: () -> Unit,
+    onSelectAll: () -> Unit,
+    onClearSelection: () -> Unit,
+    onDeleteSelected: () -> Unit
+) {
+    TopAppBar(
+        title = {
+            if (isSelectionMode) {
+                Text("$selectedCount selected")
+            } else {
+                Text(
+                    text = "Playlists",
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        },
+        navigationIcon = {
+            if (isSelectionMode) {
+                IconButton(onClick = onClearSelection) {
+                    Icon(Icons.Default.Close, contentDescription = "Clear selection")
+                }
+            } else {
+                IconButton(onClick = onNavigateBack) {
+                    Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                }
+            }
+        },
+        actions = {
+            if (isSelectionMode) {
+                IconButton(onClick = onSelectAll) {
+                    Icon(Icons.Default.SelectAll, contentDescription = "Select all")
+                }
+                IconButton(onClick = onDeleteSelected) {
+                    Icon(Icons.Default.Delete, contentDescription = "Delete selected")
+                }
+            } else {
+                IconButton(onClick = onToggleSelectionMode) {
+                    Icon(Icons.Default.CheckCircle, contentDescription = "Select mode")
+                }
+                IconButton(onClick = onCreatePlaylist) {
+                    Icon(Icons.Default.Add, contentDescription = "Create playlist")
+                }
+            }
+        }
+    )
+}
+
+@Composable
+private fun PlaylistsList(
+    playlists: List<Playlist>,
+    isSelectionMode: Boolean,
+    selectedPlaylists: Set<Long>,
+    onPlaylistClick: (Playlist) -> Unit,
+    onPlaylistLongClick: (Playlist) -> Unit,
+    onToggleSelection: (Long) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Column(
-        modifier = modifier.padding(32.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
+    LazyColumn(
+        modifier = modifier,
+        contentPadding = PaddingValues(16.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        Icon(
-            imageVector = Icons.Default.PlaylistRemove,
-            contentDescription = null,
-            modifier = Modifier.size(80.dp),
-            tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)
-        )
-
-        Spacer(modifier = Modifier.height(24.dp))
-
-        Text(
-            text = "Playlist not found",
-            style = MaterialTheme.typography.headlineMedium,
-            color = MaterialTheme.colorScheme.onBackground,
-            textAlign = TextAlign.Center
-        )
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        Text(
-            text = "The playlist you're looking for doesn't exist or has been deleted",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
-            textAlign = TextAlign.Center
-        )
-
-        Spacer(modifier = Modifier.height(32.dp))
-
-        Button(
-            onClick = onNavigateBack,
-            modifier = Modifier.fillMaxWidth(0.6f)
-        ) {
-            Icon(
-                imageVector = Icons.Default.ArrowBack,
-                contentDescription = null,
-                modifier = Modifier.size(18.dp)
+        items(
+            items = playlists,
+            key = { playlist -> playlist.id }
+        ) { playlist ->
+            PlaylistCard(
+                playlist = playlist,
+                isSelected = selectedPlaylists.contains(playlist.id),
+                isSelectionMode = isSelectionMode,
+                viewMode = PlaylistCardViewMode.LIST,
+                onClick = { onPlaylistClick(playlist) },
+                onLongClick = { onPlaylistLongClick(playlist) },
+                onToggleSelection = { onToggleSelection(playlist.id) },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .animateItemPlacement()
             )
-            Spacer(modifier = Modifier.width(8.dp))
-            Text("Go Back")
         }
     }
+}
+
+@Composable
+private fun PlaylistsGrid(
+    playlists: List<Playlist>,
+    isSelectionMode: Boolean,
+    selectedPlaylists: Set<Long>,
+    onPlaylistClick: (Playlist) -> Unit,
+    onPlaylistLongClick: (Playlist) -> Unit,
+    onToggleSelection: (Long) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    LazyVerticalGrid(
+        columns = GridCells.Adaptive(160.dp),
+        modifier = modifier,
+        contentPadding = PaddingValues(16.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        items(
+            items = playlists,
+            key = { playlist -> playlist.id }
+        ) { playlist ->
+            PlaylistCard(
+                playlist = playlist,
+                isSelected = selectedPlaylists.contains(playlist.id),
+                isSelectionMode = isSelectionMode,
+                viewMode = PlaylistCardViewMode.GRID,
+                onClick = { onPlaylistClick(playlist) },
+                onLongClick = { onPlaylistLongClick(playlist) },
+                onToggleSelection = { onToggleSelection(playlist.id) },
+                modifier = Modifier.animateItemPlacement()
+            )
+        }
+    }
+}
+
+@Composable
+private fun PlaylistsLoadingState(
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier,
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(48.dp),
+                strokeWidth = 4.dp
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+            Text(
+                text = "Loading playlists...",
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+@Composable
+private fun PlaylistsErrorState(
+    error: String,
+    onRetry: () -> Unit,
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier,
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.padding(32.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Default.Error,
+                contentDescription = null,
+                modifier = Modifier.size(64.dp),
+                tint = MaterialTheme.colorScheme.error
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Text(
+                text = "Failed to load playlists",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Text(
+                text = error,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                OutlinedButton(onClick = onDismiss) {
+                    Text("Dismiss")
+                }
+
+                Button(onClick = onRetry) {
+                    Icon(
+                        imageVector = Icons.Default.Refresh,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Retry")
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun UndoSnackbar(
+    message: String,
+    onUndo: () -> Unit,
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        modifier = modifier,
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.inverseSurface
+        )
+    ) {
+        Row(
+            modifier = Modifier.padding(16.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = message,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.inverseOnSurface,
+                modifier = Modifier.weight(1f)
+            )
+
+            Row {
+                TextButton(onClick = onUndo) {
+                    Text(
+                        text = "UNDO",
+                        color = MaterialTheme.colorScheme.inversePrimary
+                    )
+                }
+
+                TextButton(onClick = onDismiss) {
+                    Text(
+                        text = "DISMISS",
+                        color = MaterialTheme.colorScheme.inverseOnSurface
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ErrorSnackbar(
+    error: String,
+    onDismiss: () -> Unit,
+    onRetry: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        modifier = modifier,
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.errorContainer
+        )
+    ) {
+        Row(
+            modifier = Modifier.padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = Icons.Default.Error,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onErrorContainer,
+                modifier = Modifier.size(20.dp)
+            )
+
+            Spacer(modifier = Modifier.width(12.dp))
+
+            Text(
+                text = error,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onErrorContainer,
+                modifier = Modifier.weight(1f)
+            )
+
+            TextButton(onClick = onRetry) {
+                Text("Retry")
+            }
+
+            TextButton(onClick = onDismiss) {
+                Text("Dismiss")
+            }
+        }
+    }
+}
+
+// BackHandler import
+@Composable
+private fun BackHandler(
+    enabled: Boolean,
+    onBack: () -> Unit
+) {
+    androidx.activity.compose.BackHandler(enabled = enabled, onBack = onBack)
 }

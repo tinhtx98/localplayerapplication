@@ -1,246 +1,295 @@
 package com.tinhtx.localplayerapplication.core.utils
 
-import android.content.ContentUris
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.provider.MediaStore
-import androidx.core.net.toUri
 import com.tinhtx.localplayerapplication.core.constants.MediaConstants
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
-import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
 
+/**
+ * Utility functions for media operations
+ */
 object MediaUtils {
-    
+
     /**
-     * Get album art URI from MediaStore
-     */
-    fun getAlbumArtUri(albumId: Long): Uri {
-        return ContentUris.withAppendedId(
-            Uri.parse("content://media/external/audio/albumart"),
-            albumId
-        )
-    }
-    
-    /**
-     * Extract album art from audio file
-     */
-    suspend fun extractAlbumArt(filePath: String): Bitmap? = withContext(Dispatchers.IO) {
-        val retriever = MediaMetadataRetriever()
-        try {
-            retriever.setDataSource(filePath)
-            val art = retriever.embeddedPicture
-            if (art != null) {
-                BitmapFactory.decodeByteArray(art, 0, art.size)
-            } else {
-                null
-            }
-        } catch (e: Exception) {
-            null
-        } finally {
-            try {
-                retriever.release()
-            } catch (e: Exception) {
-                // Ignore
-            }
-        }
-    }
-    
-    /**
-     * Get audio file metadata
-     */
-    suspend fun getAudioMetadata(filePath: String): AudioMetadata? = withContext(Dispatchers.IO) {
-        val retriever = MediaMetadataRetriever()
-        try {
-            retriever.setDataSource(filePath)
-            
-            val title = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_TITLE)
-            val artist = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ARTIST)
-            val album = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ALBUM)
-            val duration = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: 0L
-            val year = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_YEAR)?.toIntOrNull() ?: 0
-            val track = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_CD_TRACK_NUMBER)?.toIntOrNull() ?: 0
-            
-            AudioMetadata(
-                title = title ?: File(filePath).nameWithoutExtension,
-                artist = artist ?: "Unknown Artist",
-                album = album ?: "Unknown Album",
-                duration = duration,
-                year = year,
-                track = track
-            )
-        } catch (e: Exception) {
-            null
-        } finally {
-            try {
-                retriever.release()
-            } catch (e: Exception) {
-                // Ignore
-            }
-        }
-    }
-    
-    /**
-     * Check if file is supported audio format
+     * Check if file extension is supported audio format
      */
     fun isSupportedAudioFile(filePath: String): Boolean {
         val extension = File(filePath).extension.lowercase()
         return MediaConstants.SUPPORTED_AUDIO_FORMATS.contains(extension)
     }
-    
+
     /**
      * Check if MIME type is supported
      */
     fun isSupportedMimeType(mimeType: String?): Boolean {
         return mimeType != null && MediaConstants.SUPPORTED_MIME_TYPES.contains(mimeType)
     }
-    
+
     /**
-     * Generate unique media ID
+     * Extract album art from audio file
      */
-    fun generateMediaId(songId: Long): String {
-        return "song_$songId"
-    }
-    
-    /**
-     * Parse media ID to get song ID
-     */
-    fun parseMediaId(mediaId: String): Long? {
+    fun extractAlbumArt(filePath: String): Bitmap? {
+        var retriever: MediaMetadataRetriever? = null
         return try {
-            if (mediaId.startsWith("song_")) {
-                mediaId.removePrefix("song_").toLong()
-            } else {
-                null
-            }
-        } catch (e: NumberFormatException) {
+            retriever = MediaMetadataRetriever()
+            retriever.setDataSource(filePath)
+            val art = retriever.embeddedPicture
+            art?.let { BitmapFactory.decodeByteArray(it, 0, it.size) }
+        } catch (e: Exception) {
             null
+        } finally {
+            try {
+                retriever?.release()
+            } catch (e: Exception) {
+                // Ignore
+            }
         }
     }
-    
+
     /**
-     * Format file size
+     * Extract album art from URI
      */
-    fun formatFileSize(sizeInBytes: Long): String {
-        val kb = 1024.0
-        val mb = kb * 1024
-        val gb = mb * 1024
-        
-        return when {
-            sizeInBytes >= gb -> String.format("%.1f GB", sizeInBytes / gb)
-            sizeInBytes >= mb -> String.format("%.1f MB", sizeInBytes / mb)
-            sizeInBytes >= kb -> String.format("%.1f KB", sizeInBytes / kb)
-            else -> "$sizeInBytes B"
+    fun extractAlbumArt(context: Context, uri: Uri): Bitmap? {
+        var retriever: MediaMetadataRetriever? = null
+        return try {
+            retriever = MediaMetadataRetriever()
+            retriever.setDataSource(context, uri)
+            val art = retriever.embeddedPicture
+            art?.let { BitmapFactory.decodeByteArray(it, 0, it.size) }
+        } catch (e: Exception) {
+            null
+        } finally {
+            try {
+                retriever?.release()
+            } catch (e: Exception) {
+                // Ignore
+            }
         }
     }
-    
+
+    /**
+     * Get audio duration from file path
+     */
+    fun getAudioDuration(filePath: String): Long {
+        var retriever: MediaMetadataRetriever? = null
+        return try {
+            retriever = MediaMetadataRetriever()
+            retriever.setDataSource(filePath)
+            val duration = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)
+            duration?.toLongOrNull() ?: 0L
+        } catch (e: Exception) {
+            0L
+        } finally {
+            try {
+                retriever?.release()
+            } catch (e: Exception) {
+                // Ignore
+            }
+        }
+    }
+
+    /**
+     * Extract metadata from audio file
+     */
+    data class AudioMetadata(
+        val title: String?,
+        val artist: String?,
+        val album: String?,
+        val duration: Long,
+        val year: String?,
+        val genre: String?,
+        val trackNumber: String?,
+        val albumArtist: String?
+    )
+
+    fun extractMetadata(filePath: String): AudioMetadata {
+        var retriever: MediaMetadataRetriever? = null
+        return try {
+            retriever = MediaMetadataRetriever()
+            retriever.setDataSource(filePath)
+            
+            AudioMetadata(
+                title = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_TITLE),
+                artist = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ARTIST),
+                album = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ALBUM),
+                duration = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: 0L,
+                year = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_YEAR),
+                genre = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_GENRE),
+                trackNumber = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_CD_TRACK_NUMBER),
+                albumArtist = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ALBUMARTIST)
+            )
+        } catch (e: Exception) {
+            AudioMetadata(null, null, null, 0L, null, null, null, null)
+        } finally {
+            try {
+                retriever?.release()
+            } catch (e: Exception) {
+                // Ignore
+            }
+        }
+    }
+
+    /**
+     * Get album art URI from MediaStore
+     */
+    fun getAlbumArtUri(albumId: Long): Uri {
+        return Uri.parse("content://media/external/audio/albumart/$albumId")
+    }
+
     /**
      * Save bitmap to cache directory
      */
-    suspend fun saveBitmapToCache(
-        context: Context,
-        bitmap: Bitmap,
-        fileName: String
-    ): String? = withContext(Dispatchers.IO) {
-        val cacheDir = File(context.cacheDir, "album_art")
-        if (!cacheDir.exists()) {
-            cacheDir.mkdirs()
-        }
-        
-        val file = File(cacheDir, "$fileName.jpg")
-        
-        try {
-            val stream = ByteArrayOutputStream()
-            bitmap.compress(Bitmap.CompressFormat.JPEG, MediaConstants.ALBUM_ART_QUALITY, stream)
-            val bitmapData = stream.toByteArray()
+    fun saveBitmapToCache(context: Context, bitmap: Bitmap, fileName: String): String? {
+        return try {
+            val cacheDir = File(context.cacheDir, "album_art")
+            if (!cacheDir.exists()) {
+                cacheDir.mkdirs()
+            }
             
-            val fileOutputStream = FileOutputStream(file)
-            fileOutputStream.write(bitmapData)
-            fileOutputStream.flush()
-            fileOutputStream.close()
+            val file = File(cacheDir, "$fileName.jpg")
+            val outputStream = FileOutputStream(file)
+            bitmap.compress(Bitmap.CompressFormat.JPEG, 90, outputStream)
+            outputStream.flush()
+            outputStream.close()
             
             file.absolutePath
         } catch (e: IOException) {
             null
         }
     }
-    
+
     /**
-     * Get audio session ID for equalizer
+     * Load bitmap from cache
      */
-    fun getAudioSessionId(context: Context): Int {
-        // This would typically come from the media player
-        return 0
-    }
-    
-    /**
-     * Calculate seek position percentage
-     */
-    fun calculateSeekPercentage(currentPosition: Long, duration: Long): Float {
-        if (duration <= 0) return 0f
-        return (currentPosition.toFloat() / duration.toFloat()).coerceIn(0f, 1f)
-    }
-    
-    /**
-     * Calculate position from percentage
-     */
-    fun calculatePositionFromPercentage(percentage: Float, duration: Long): Long {
-        return (percentage * duration).toLong().coerceIn(0L, duration)
-    }
-    
-    /**
-     * Check if audio file exists and is readable
-     */
-    fun isAudioFileValid(filePath: String): Boolean {
-        val file = File(filePath)
-        return file.exists() && file.canRead() && file.length() > 0
-    }
-    
-    /**
-     * Get content URI from file path
-     */
-    fun getContentUri(filePath: String): Uri? {
+    fun loadBitmapFromCache(context: Context, fileName: String): Bitmap? {
         return try {
-            File(filePath).toUri()
+            val cacheDir = File(context.cacheDir, "album_art")
+            val file = File(cacheDir, "$fileName.jpg")
+            if (file.exists()) {
+                BitmapFactory.decodeFile(file.absolutePath)
+            } else {
+                null
+            }
         } catch (e: Exception) {
             null
         }
     }
-    
+
     /**
-     * Clean up artist name (remove "Various Artists", etc.)
+     * Clear album art cache
      */
-    fun cleanArtistName(artist: String?): String {
-        return when {
-            artist.isNullOrBlank() -> "Unknown Artist"
-            artist.equals("Various Artists", ignoreCase = true) -> "Various Artists"
-            artist.equals("<unknown>", ignoreCase = true) -> "Unknown Artist"
-            else -> artist.trim()
+    fun clearAlbumArtCache(context: Context) {
+        try {
+            val cacheDir = File(context.cacheDir, "album_art")
+            if (cacheDir.exists()) {
+                cacheDir.listFiles()?.forEach { file ->
+                    file.delete()
+                }
+            }
+        } catch (e: Exception) {
+            // Ignore
         }
     }
-    
+
     /**
-     * Clean up album name
+     * Get file size in bytes
      */
-    fun cleanAlbumName(album: String?): String {
-        return when {
-            album.isNullOrBlank() -> "Unknown Album"
-            album.equals("<unknown>", ignoreCase = true) -> "Unknown Album"
-            else -> album.trim()
+    fun getFileSize(filePath: String): Long {
+        return try {
+            File(filePath).length()
+        } catch (e: Exception) {
+            0L
         }
     }
-    
-    data class AudioMetadata(
-        val title: String,
-        val artist: String,
-        val album: String,
-        val duration: Long,
-        val year: Int,
-        val track: Int
-    )
+
+    /**
+     * Check if file exists
+     */
+    fun fileExists(filePath: String): Boolean {
+        return try {
+            File(filePath).exists()
+        } catch (e: Exception) {
+            false
+        }
+    }
+
+    /**
+     * Get file extension
+     */
+    fun getFileExtension(filePath: String): String {
+        return File(filePath).extension.lowercase()
+    }
+
+    /**
+     * Generate unique file name based on metadata
+     */
+    fun generateCacheKey(artist: String?, album: String?, title: String?): String {
+        val cleanArtist = artist?.replace(Regex("[^a-zA-Z0-9]"), "") ?: "unknown"
+        val cleanAlbum = album?.replace(Regex("[^a-zA-Z0-9]"), "") ?: "unknown"
+        val cleanTitle = title?.replace(Regex("[^a-zA-Z0-9]"), "") ?: "unknown"
+        return "${cleanArtist}_${cleanAlbum}_${cleanTitle}".take(50)
+    }
+
+    /**
+     * Convert milliseconds to readable time format
+     */
+    fun formatTime(milliseconds: Long): String {
+        val seconds = (milliseconds / 1000) % 60
+        val minutes = (milliseconds / (1000 * 60)) % 60
+        val hours = (milliseconds / (1000 * 60 * 60))
+
+        return if (hours > 0) {
+            String.format("%02d:%02d:%02d", hours, minutes, seconds)
+        } else {
+            String.format("%02d:%02d", minutes, seconds)
+        }
+    }
+
+    /**
+     * Validate audio file integrity
+     */
+    fun validateAudioFile(filePath: String): Boolean {
+        var retriever: MediaMetadataRetriever? = null
+        return try {
+            retriever = MediaMetadataRetriever()
+            retriever.setDataSource(filePath)
+            val duration = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)
+            duration != null && duration.toLongOrNull() != null && duration.toLong() > 0
+        } catch (e: Exception) {
+            false
+        } finally {
+            try {
+                retriever?.release()
+            } catch (e: Exception) {
+                // Ignore
+            }
+        }
+    }
+
+    /**
+     * Get audio bitrate
+     */
+    fun getAudioBitrate(filePath: String): Int {
+        var retriever: MediaMetadataRetriever? = null
+        return try {
+            retriever = MediaMetadataRetriever()
+            retriever.setDataSource(filePath)
+            val bitrate = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_BITRATE)
+            bitrate?.toIntOrNull() ?: 0
+        } catch (e: Exception) {
+            0
+        } finally {
+            try {
+                retriever?.release()
+            } catch (e: Exception) {
+                // Ignore
+            }
+        }
+    }
 }

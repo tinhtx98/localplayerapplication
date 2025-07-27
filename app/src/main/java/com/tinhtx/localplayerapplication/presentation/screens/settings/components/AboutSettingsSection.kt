@@ -3,69 +3,101 @@ package com.tinhtx.localplayerapplication.presentation.screens.settings.componen
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
-import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import com.tinhtx.localplayerapplication.domain.model.AppInfo
 
 @Composable
 fun AboutSettingsSection(
-    appInfo: AppInfo,
-    onShowAboutDialog: () -> Unit,
+    appVersion: String,
+    buildNumber: String,
+    appSize: String,
+    onViewChangelog: () -> Unit,
+    onViewLicenses: () -> Unit,
+    onContactSupport: () -> Unit,
+    onVisitGitHub: () -> Unit,
+    onNavigateToAbout: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Card(
-        modifier = modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
-        ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-    ) {
+    Column(modifier = modifier) {
+        SettingsSectionHeader(
+            title = "About",
+            icon = Icons.Default.Info
+        )
+        
+        Spacer(modifier = Modifier.height(8.dp))
+        
         Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            // App Version
-            SettingClickableItem(
-                title = "App Version",
-                subtitle = "Version ${appInfo.versionName} (${appInfo.versionCode})",
+            // App info
+            SettingItem(
+                title = "App Information",
+                subtitle = "Version $appVersion • $appSize",
                 icon = Icons.Default.Info,
-                value = "View Details",
-                onClick = onShowAboutDialog
+                onClick = onNavigateToAbout
             )
-            
-            HorizontalDivider()
-            
-            // Privacy Policy
-            SettingActionItem(
-                title = "Privacy Policy",
-                subtitle = "Read our privacy policy",
-                icon = Icons.Default.PrivacyTip,
-                actionText = "View",
-                onClick = { /* Open privacy policy */ }
+
+            // What's new
+            SettingItem(
+                title = "What's New",
+                subtitle = "View changelog and recent updates",
+                icon = Icons.Default.NewReleases,
+                onClick = onViewChangelog
             )
-            
-            HorizontalDivider()
-            
-            // Terms of Service
-            SettingActionItem(
-                title = "Terms of Service",
-                subtitle = "Read our terms of service",
-                icon = Icons.Default.Description,
-                actionText = "View",
-                onClick = { /* Open terms of service */ }
-            )
-            
-            HorizontalDivider()
-            
-            // Open Source Licenses
-            SettingActionItem(
+
+            // Open source licenses
+            SettingItem(
                 title = "Open Source Licenses",
-                subtitle = "Third-party library licenses",
+                subtitle = "View licenses for third-party libraries",
+                icon = Icons.Default.Description,
+                onClick = onViewLicenses
+            )
+
+            // Privacy policy
+            SettingItem(
+                title = "Privacy Policy",
+                subtitle = "How we handle your data",
+                icon = Icons.Default.Privacy,
+                onClick = {
+                    // TODO: Open privacy policy
+                }
+            )
+
+            // Terms of service
+            SettingItem(
+                title = "Terms of Service",
+                subtitle = "Terms and conditions of use",
+                icon = Icons.Default.Gavel,
+                onClick = {
+                    // TODO: Open terms of service
+                }
+            )
+
+            // Contact support
+            SettingItem(
+                title = "Contact Support",
+                subtitle = "Get help or report issues",
+                icon = Icons.Default.Support,
+                onClick = onContactSupport
+            )
+
+            // Rate app
+            SettingItem(
+                title = "Rate This App",
+                subtitle = "Leave a review on Google Play",
+                icon = Icons.Default.Star,
+                onClick = {
+                    // TODO: Open app store rating
+                }
+            )
+
+            // GitHub
+            SettingItem(
+                title = "Source Code",
+                subtitle = "View project on GitHub",
                 icon = Icons.Default.Code,
-                actionText = "View",
-                onClick = { /* Open licenses */ }
+                onClick = onVisitGitHub
             )
         }
     }

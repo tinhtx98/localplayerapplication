@@ -3,73 +3,59 @@ package com.tinhtx.localplayerapplication.domain.model
 import android.os.Parcelable
 import kotlinx.parcelize.Parcelize
 
+/**
+ * Domain model representing a playlist
+ */
 @Parcelize
 data class Playlist(
     val id: Long = 0,
     val name: String,
     val description: String? = null,
-    val coverArtPath: String? = null,
-    val songCount: Int = 0,
-    val duration: Long = 0,
-    val isFavorite: Boolean = false,
     val createdAt: Long = System.currentTimeMillis(),
-    val updatedAt: Long = System.currentTimeMillis()
+    val updatedAt: Long = System.currentTimeMillis(),
+    val songCount: Int = 0,
+    val duration: Long = 0L, // total duration in milliseconds
+    val artworkPath: String? = null
 ) : Parcelable {
     
-    val formattedDuration: String
-        get() = formatDuration(duration)
+    val displayName: String
+        get() = if (name.isBlank()) "Untitled Playlist" else name
+    
+    val hasDescription: Boolean
+        get() = !description.isNullOrBlank()
+    
+    val hasArtwork: Boolean
+        get() = !artworkPath.isNullOrBlank()
     
     val songCountText: String
         get() = when (songCount) {
-            0 -> "Empty playlist"
+            0 -> "No songs"
             1 -> "1 song"
             else -> "$songCount songs"
         }
     
-    val summaryText: String
+    val formattedDuration: String
+        get() = formatDuration(duration)
+    
+    val statsText: String
         get() = if (duration > 0) {
             "$songCountText • $formattedDuration"
         } else {
             songCountText
         }
     
-    val isEmpty: Boolean
-        get() = songCount == 0
+    val isSystemPlaylist: Boolean
+        get() = id < 0 // Negative IDs for system playlists
     
     private fun formatDuration(durationMs: Long): String {
-        val totalSeconds = durationMs / 1000
-        val hours = totalSeconds / 3600
-        val minutes = (totalSeconds % 3600) / 60
+        val seconds = (durationMs / 1000) % 60
+        val minutes = (durationMs / (1000 * 60)) % 60
+        val hours = (durationMs / (1000 * 60 * 60))
         
         return if (hours > 0) {
-            String.format("%d hr %d min", hours, minutes)
+            String.format("%d:%02d:%02d", hours, minutes, seconds)
         } else {
-            String.format("%d min", minutes)
+            String.format("%d:%02d", minutes, seconds)
         }
-    }
-    
-    companion object {
-        fun empty() = Playlist(
-            name = "",
-            description = null
-        )
-        
-        fun favorites() = Playlist(
-            id = -1,
-            name = "Favorites",
-            description = "Your favorite songs"
-        )
-        
-        fun recentlyPlayed() = Playlist(
-            id = -2,
-            name = "Recently Played",
-            description = "Songs you've played recently"
-        )
-        
-        fun mostPlayed() = Playlist(
-            id = -3,
-            name = "Most Played",
-            description = "Your most played songs"
-        )
     }
 }

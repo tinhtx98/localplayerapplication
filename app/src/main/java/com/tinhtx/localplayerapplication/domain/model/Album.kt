@@ -3,6 +3,9 @@ package com.tinhtx.localplayerapplication.domain.model
 import android.os.Parcelable
 import kotlinx.parcelize.Parcelize
 
+/**
+ * Domain model representing an album
+ */
 @Parcelize
 data class Album(
     val id: Long = 0,
@@ -10,10 +13,9 @@ data class Album(
     val name: String,
     val artist: String,
     val artistId: Long,
-    val songCount: Int,
-    val firstYear: Int,
-    val lastYear: Int,
-    val albumArtPath: String? = null
+    val year: Int,
+    val songCount: Int = 0,
+    val artworkPath: String? = null
 ) : Parcelable {
     
     val displayName: String
@@ -22,12 +24,11 @@ data class Album(
     val displayArtist: String
         get() = if (artist.isBlank() || artist == "Unknown Artist") "Unknown Artist" else artist
     
-    val yearRange: String
-        get() = when {
-            firstYear == 0 && lastYear == 0 -> "Unknown"
-            firstYear == lastYear -> firstYear.toString()
-            else -> "$firstYear - $lastYear"
-        }
+    val displayYear: String
+        get() = if (year > 0) year.toString() else "Unknown"
+    
+    val hasArtwork: Boolean
+        get() = !artworkPath.isNullOrBlank()
     
     val songCountText: String
         get() = when (songCount) {
@@ -35,16 +36,4 @@ data class Album(
             1 -> "1 song"
             else -> "$songCount songs"
         }
-    
-    companion object {
-        fun empty() = Album(
-            mediaStoreId = -1,
-            name = "",
-            artist = "",
-            artistId = -1,
-            songCount = 0,
-            firstYear = 0,
-            lastYear = 0
-        )
-    }
 }

@@ -2,322 +2,620 @@ package com.tinhtx.localplayerapplication.presentation.screens.playlist
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.tinhtx.localplayerapplication.core.constants.AppConstants
 import com.tinhtx.localplayerapplication.domain.model.*
+import com.tinhtx.localplayerapplication.domain.usecase.music.*
 import com.tinhtx.localplayerapplication.domain.usecase.favorites.*
-import com.tinhtx.localplayerapplication.domain.usecase.player.PlaySongUseCase
-import com.tinhtx.localplayerapplication.domain.usecase.playlist.*
+import com.tinhtx.localplayerapplication.domain.usecase.player.*
+import com.tinhtx.localplayerapplication.domain.usecase.settings.GetAppSettingsUseCase
+import com.tinhtx.localplayerapplication.domain.repository.PlaylistRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import javax.inject.Inject
 
+/**
+ * ViewModel for Playlist Module - Supports both PlaylistsScreen and PlaylistDetailScreen
+ */
 @HiltViewModel
 class PlaylistViewModel @Inject constructor(
-    private val getPlaylistUseCase: GetPlaylistUseCase,
-    private val getPlaylistSongsUseCase: GetPlaylistSongsUseCase,
-    private val updatePlaylistUseCase: UpdatePlaylistUseCase,
-    private val deletePlaylistUseCase: DeletePlaylistUseCase,
-    private val addSongsToPlaylistUseCase: AddSongsToPlaylistUseCase,
-    private val removeSongFromPlaylistUseCase: RemoveSongFromPlaylistUseCase,
+    // Music Use Cases
+    private val getAllSongsUseCase: GetAllSongsUseCase,
+    
+    // Player Use Cases
+    private val playSongUseCase: PlaySongUseCase,
+    
+    // Favorites Use Cases
+    private val getFavoritesUseCase: GetFavoritesUseCase,
     private val addToFavoritesUseCase: AddToFavoritesUseCase,
     private val removeFromFavoritesUseCase: RemoveFromFavoritesUseCase,
-    private val playSongUseCase: PlaySongUseCase
+    
+    // Settings Use Case
+    private val getAppSettingsUseCase: GetAppSettingsUseCase,
+    
+    // Repository
+    private val playlistRepository: PlaylistRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(PlaylistUiState())
     val uiState: StateFlow<PlaylistUiState> = _uiState.asStateFlow()
 
-    private val _searchQuery = MutableStateFlow("")
-    private val _sortOrder = MutableStateFlow(AppConstants.SortOrder.CUSTOM)
-    private val _isSearching = MutableStateFlow(false)
+    private var currentPlaylistId: Long = -1
+    private var searchJob: Job? = null
+    private var undoJob: Job? = null
 
     init {
-        observeSearchAndSort()
+        loadAllPlaylists()
+        observeSettings()
+        observeFavorites()
     }
 
-    private fun observeSearchAndSort() {
+    // =================================================================================
+    // PLAYLISTS LIST FUNCTIONS (for PlaylistsScreen)
+    // =================================================================================
+
+    /**
+     * Load all playlists
+     */
+    fun loadAllPlaylists() {
         viewModelScope.launch {
-            combine(
-                _searchQuery,
-                _sortOrder,
-                _uiState.map { it.songs }
-            ) { query, sortOrder, songs ->
-                processSearchAndSort(query, sortOrder, songs)
-            }.collect { (filteredSongs, processedState) ->
-                _uiState.value = processedState.copy(
-                    filteredSongs = filteredSongs,
-                    searchQuery = _searchQuery.value,
-                    sortOrder = _sortOrder.value,
-                    isSearching = _isSearching.value
-                )
-            }
-        }
-    }
-
-    private fun processSearchAndSort(
-        query: String,
-        sortOrder: AppConstants.SortOrder,
-        songs: List<Song>
-    ): Pair<List<Song>, PlaylistUiState> {
-        val currentState = _uiState.value
-
-        // Apply search filter
-        val searchFiltered = if (query.isBlank()) {
-            songs
-        } else {
-            songs.filter { song ->
-                song.title.contains(query, ignoreCase = true) ||
-                song.displayArtist.contains(query, ignoreCase = true) ||
-                song.displayAlbum.contains(query, ignoreCase = true)
-            }
-        }
-
-        // Apply sorting
-        val sorted = when (sortOrder) {
-            AppConstants.SortOrder.TITLE_ASC -> searchFiltered.sortedBy { it.title.lowercase() }
-            AppConstants.SortOrder.TITLE_DESC -> searchFiltered.sortedByDescending { it.title.lowercase() }
-            AppConstants.SortOrder.ARTIST_ASC -> searchFiltered.sortedBy { it.displayArtist.lowercase() }
-            AppConstants.SortOrder.ARTIST_DESC -> searchFiltered.sortedByDescending { it.displayArtist.lowercase() }
-            AppConstants.SortOrder.ALBUM_ASC -> searchFiltered.sortedBy { it.displayAlbum.lowercase() }
-            AppConstants.SortOrder.ALBUM_DESC -> searchFiltered.sortedByDescending { it.displayAlbum.lowercase() }
-            AppConstants.SortOrder.DURATION_ASC -> searchFiltered.sortedBy { it.duration }
-            AppConstants.SortOrder.DURATION_DESC -> searchFiltered.sortedByDescending { it.duration }
-            AppConstants.SortOrder.DATE_ADDED_ASC -> searchFiltered.sortedBy { it.dateAdded }
-            AppConstants.SortOrder.DATE_ADDED_DESC -> searchFiltered.sortedByDescending { it.dateAdded }
-            AppConstants.SortOrder.CUSTOM -> searchFiltered // Keep original playlist order
-        }
-
-        return sorted to currentState
-    }
-
-    fun loadPlaylist(playlistId: Long) {
-        viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isLoading = true, error = null)
-
+            _uiState.value = _uiState.value.copy(playlistsLoading = true, playlistsError = null)
+            
             try {
-                // Load playlist and songs concurrently
-                combine(
-                    getPlaylistUseCase(playlistId),
-                    getPlaylistSongsUseCase(playlistId)
-                ) { playlist, songs ->
-                    PlaylistData(playlist, songs)
-                }.catch { exception ->
+                playlistRepository.getAllPlaylists().first().let { playlists ->
                     _uiState.value = _uiState.value.copy(
-                        isLoading = false,
-                        error = exception.message ?: "Failed to load playlist"
-                    )
-                }.collect { playlistData ->
-                    val totalDuration = calculateTotalDuration(playlistData.songs)
-                    
-                    _uiState.value = _uiState.value.copy(
-                        isLoading = false,
-                        error = null,
-                        playlist = playlistData.playlist,
-                        songs = playlistData.songs,
-                        totalDuration = totalDuration
+                        playlists = playlists,
+                        playlistsLoading = false,
+                        playlistsError = null
                     )
                 }
-            } catch (exception) {
+            } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
-                    isLoading = false,
-                    error = exception.message ?: "Failed to load playlist"
+                    playlists = emptyList(),
+                    playlistsLoading = false,
+                    playlistsError = "Failed to load playlists: ${e.message}"
                 )
             }
         }
     }
 
-    fun retryLoadPlaylist() {
-        val currentPlaylist = _uiState.value.playlist
-        currentPlaylist?.let { loadPlaylist(it.id) }
+    /**
+     * Create new playlist
+     */
+    fun createPlaylist(name: String, description: String = "") {
+        viewModelScope.launch {
+            try {
+                _uiState.value = _uiState.value.copy(creatingPlaylist = true)
+                
+                val playlist = Playlist(
+                    id = 0, // Will be generated by repository
+                    name = name.trim(),
+                    description = description.trim(),
+                    songCount = 0,
+                    totalDuration = 0L,
+                    createdAt = System.currentTimeMillis()
+                )
+                
+                val createdPlaylist = playlistRepository.createPlaylist(playlist)
+                
+                _uiState.value = _uiState.value.copy(
+                    creatingPlaylist = false,
+                    showCreatePlaylistDialog = false,
+                    newPlaylistName = "",
+                    newPlaylistDescription = "",
+                    selectedPlaylistForNavigation = createdPlaylist
+                )
+                
+                // Reload playlists
+                loadAllPlaylists()
+                
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(
+                    creatingPlaylist = false,
+                    error = "Failed to create playlist: ${e.message}"
+                )
+            }
+        }
     }
 
+    /**
+     * Delete multiple playlists
+     */
+    fun deleteSelectedPlaylists() {
+        viewModelScope.launch {
+            try {
+                val selectedPlaylistIds = _uiState.value.selectedPlaylists.toList()
+                val playlistsToDelete = _uiState.value.playlists.filter { 
+                    selectedPlaylistIds.contains(it.id) 
+                }
+                
+                // Delete playlists
+                selectedPlaylistIds.forEach { playlistId ->
+                    playlistRepository.deletePlaylist(playlistId)
+                }
+                
+                // Show undo for last deleted playlist
+                if (playlistsToDelete.isNotEmpty()) {
+                    _uiState.value = _uiState.value.copy(
+                        lastDeletedPlaylist = playlistsToDelete.last(),
+                        showUndoSnackbar = true,
+                        undoMessage = "Deleted ${playlistsToDelete.size} playlist(s)"
+                    )
+                    
+                    // Auto-hide undo snackbar after 5 seconds
+                    undoJob?.cancel()
+                    undoJob = launch {
+                        delay(5000)
+                        _uiState.value = _uiState.value.copy(showUndoSnackbar = false)
+                    }
+                }
+                
+                // Clear selection and reload
+                clearPlaylistsSelection()
+                loadAllPlaylists()
+                
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(
+                    error = "Failed to delete playlists: ${e.message}"
+                )
+            }
+        }
+    }
+
+    /**
+     * Search playlists
+     */
+    fun searchPlaylists(query: String) {
+        _uiState.value = _uiState.value.copy(
+            playlistsSearchQuery = query,
+            playlistsSearchActive = query.isNotBlank()
+        )
+    }
+
+    /**
+     * Clear playlists search
+     */
+    fun clearPlaylistsSearch() {
+        _uiState.value = _uiState.value.copy(
+            playlistsSearchQuery = "",
+            playlistsSearchActive = false
+        )
+    }
+
+    /**
+     * Update playlists sort order
+     */
+    fun updatePlaylistsSortOrder(sortOrder: PlaylistsSortOrder, ascending: Boolean = false) {
+        _uiState.value = _uiState.value.copy(
+            playlistsSortOrder = sortOrder,
+            playlistsSortAscending = ascending
+        )
+    }
+
+    /**
+     * Update playlists view mode
+     */
+    fun updatePlaylistsViewMode(viewMode: PlaylistsViewMode) {
+        _uiState.value = _uiState.value.copy(playlistsViewMode = viewMode)
+    }
+
+    /**
+     * Toggle playlists selection mode
+     */
+    fun togglePlaylistsSelectionMode() {
+        val isSelectionMode = !_uiState.value.playlistsSelectionMode
+        _uiState.value = _uiState.value.copy(
+            playlistsSelectionMode = isSelectionMode,
+            selectedPlaylists = if (isSelectionMode) _uiState.value.selectedPlaylists else emptySet()
+        )
+    }
+
+    /**
+     * Toggle playlist selection
+     */
+    fun togglePlaylistSelection(playlistId: Long) {
+        val currentSelection = _uiState.value.selectedPlaylists.toMutableSet()
+        
+        if (currentSelection.contains(playlistId)) {
+            currentSelection.remove(playlistId)
+        } else {
+            currentSelection.add(playlistId)
+        }
+        
+        _uiState.value = _uiState.value.copy(selectedPlaylists = currentSelection)
+        
+        // Exit selection mode if no playlists selected
+        if (currentSelection.isEmpty()) {
+            _uiState.value = _uiState.value.copy(playlistsSelectionMode = false)
+        }
+    }
+
+    /**
+     * Select all playlists
+     */
+    fun selectAllPlaylists() {
+        val allPlaylistIds = _uiState.value.filteredPlaylists.map { it.id }.toSet()
+        _uiState.value = _uiState.value.copy(selectedPlaylists = allPlaylistIds)
+    }
+
+    /**
+     * Clear playlists selection
+     */
+    fun clearPlaylistsSelection() {
+        _uiState.value = _uiState.value.copy(
+            playlistsSelectionMode = false,
+            selectedPlaylists = emptySet()
+        )
+    }
+
+    /**
+     * Navigate to playlist detail
+     */
+    fun navigateToPlaylistDetail(playlist: Playlist) {
+        _uiState.value = _uiState.value.copy(selectedPlaylistForNavigation = playlist)
+    }
+
+    // =================================================================================
+    // PLAYLIST DETAIL FUNCTIONS (for PlaylistDetailScreen)
+    // =================================================================================
+
+    /**
+     * Load playlist detail by ID
+     */
+    fun loadPlaylistDetail(playlistId: Long) {
+        currentPlaylistId = playlistId
+        
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(playlistDetailLoading = true)
+            
+            try {
+                // Load playlist and songs concurrently
+                val playlistDeferred = async { loadPlaylistData(playlistId) }
+                val songsDeferred = async { loadPlaylistSongs(playlistId) }
+                
+                awaitAll(playlistDeferred, songsDeferred)
+                
+                _uiState.value = _uiState.value.copy(playlistDetailLoading = false)
+                
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(
+                    playlistDetailLoading = false,
+                    playlistDetailError = "Failed to load playlist: ${e.message}"
+                )
+            }
+        }
+    }
+
+    private suspend fun loadPlaylistData(playlistId: Long) {
+        try {
+            val playlist = playlistRepository.getPlaylistById(playlistId).first()
+            _uiState.value = _uiState.value.copy(
+                currentPlaylist = playlist,
+                editingPlaylistName = playlist?.name ?: "",
+                editingPlaylistDescription = playlist?.description ?: ""
+            )
+        } catch (e: Exception) {
+            _uiState.value = _uiState.value.copy(
+                playlistDetailError = "Failed to load playlist: ${e.message}"
+            )
+        }
+    }
+
+    private suspend fun loadPlaylistSongs(playlistId: Long) {
+        try {
+            _uiState.value = _uiState.value.copy(playlistSongsLoading = true)
+            
+            val songs = playlistRepository.getPlaylistSongs(playlistId).first()
+            _uiState.value = _uiState.value.copy(
+                playlistSongs = songs,
+                playlistSongsLoading = false
+            )
+        } catch (e: Exception) {
+            _uiState.value = _uiState.value.copy(
+                playlistSongsLoading = false,
+                playlistSongsError = "Failed to load songs: ${e.message}"
+            )
+        }
+    }
+
+    /**
+     * Update playlist info
+     */
+    fun updatePlaylistInfo(name: String, description: String) {
+        viewModelScope.launch {
+            try {
+                _uiState.value = _uiState.value.copy(updatingPlaylist = true)
+                
+                val playlist = _uiState.value.currentPlaylist
+                if (playlist != null) {
+                    val updatedPlaylist = playlist.copy(
+                        name = name.trim(),
+                        description = description.trim(),
+                        updatedAt = System.currentTimeMillis()
+                    )
+                    
+                    playlistRepository.updatePlaylist(updatedPlaylist)
+                    
+                    _uiState.value = _uiState.value.copy(
+                        currentPlaylist = updatedPlaylist,
+                        editMode = false,
+                        showEditPlaylistDialog = false,
+                        editingPlaylistName = name.trim(),
+                        editingPlaylistDescription = description.trim(),
+                        updatingPlaylist = false
+                    )
+                    
+                    // Update in playlists list as well
+                    loadAllPlaylists()
+                }
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(
+                    updatingPlaylist = false,
+                    error = "Failed to update playlist: ${e.message}"
+                )
+            }
+        }
+    }
+
+    /**
+     * Delete current playlist
+     */
+    fun deleteCurrentPlaylist() {
+        viewModelScope.launch {
+            try {
+                _uiState.value = _uiState.value.copy(deletingPlaylist = true)
+                
+                val playlist = _uiState.value.currentPlaylist
+                if (playlist != null) {
+                    playlistRepository.deletePlaylist(playlist.id)
+                    
+                    _uiState.value = _uiState.value.copy(
+                        lastDeletedPlaylist = playlist,
+                        showUndoSnackbar = true,
+                        undoMessage = "Deleted playlist \"${playlist.name}\"",
+                        deletingPlaylist = false,
+                        showDeletePlaylistDialog = false
+                    )
+                    
+                    // Auto-hide undo snackbar after 5 seconds
+                    undoJob?.cancel()
+                    undoJob = launch {
+                        delay(5000)
+                        _uiState.value = _uiState.value.copy(showUndoSnackbar = false)
+                    }
+                    
+                    // Update playlists list
+                    loadAllPlaylists()
+                    
+                    // Navigation back will be handled by screen
+                }
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(
+                    deletingPlaylist = false,
+                    error = "Failed to delete playlist: ${e.message}"
+                )
+            }
+        }
+    }
+
+    // =================================================================================
+    // PLAYBACK FUNCTIONS
+    // =================================================================================
+
+    /**
+     * Play specific song from playlist
+     */
     fun playSong(song: Song) {
         viewModelScope.launch {
             try {
-                playSongUseCase(song, "playlist_screen")
-            } catch (exception) {
-                handleError(exception, "Failed to play song")
-            }
-        }
-    }
-
-    fun playAllSongs() {
-        viewModelScope.launch {
-            try {
-                val songs = _uiState.value.songs
-                if (songs.isNotEmpty()) {
-                    playSongUseCase(songs.first(), "playlist_play_all")
-                    // Set up queue with all playlist songs
-                }
-            } catch (exception) {
-                handleError(exception, "Failed to play all songs")
-            }
-        }
-    }
-
-    fun shufflePlaylist() {
-        viewModelScope.launch {
-            try {
-                val songs = _uiState.value.songs.shuffled()
-                if (songs.isNotEmpty()) {
-                    playSongUseCase(songs.first(), "playlist_shuffle")
-                    // Set up shuffled queue
-                }
-            } catch (exception) {
-                handleError(exception, "Failed to shuffle playlist")
-            }
-        }
-    }
-
-    fun toggleFavorite(song: Song) {
-        viewModelScope.launch {
-            try {
-                if (song.isFavorite) {
-                    removeFromFavoritesUseCase(song.id)
-                } else {
-                    addToFavoritesUseCase(song.id)
-                }
-            } catch (exception) {
-                handleError(exception, "Failed to toggle favorite")
-            }
-        }
-    }
-
-    fun removeSongFromPlaylist(song: Song) {
-        viewModelScope.launch {
-            try {
-                val playlist = _uiState.value.playlist ?: return@launch
-                removeSongFromPlaylistUseCase(playlist.id, song.id)
-                
-                // Update local state immediately for better UX
-                val updatedSongs = _uiState.value.songs.filter { it.id != song.id }
-                val updatedPlaylist = playlist.copy(songCount = updatedSongs.size)
-                val newTotalDuration = calculateTotalDuration(updatedSongs)
-                
+                playSongUseCase.execute(song).fold(
+                    onSuccess = {
+                        _uiState.value = _uiState.value.copy(
+                            currentPlayingSong = song,
+                            isPlaying = true,
+                            selectedSongForPlayback = song
+                        )
+                    },
+                    onFailure = { error ->
+                        _uiState.value = _uiState.value.copy(
+                            error = "Failed to play song: ${error.message}"
+                        )
+                    }
+                )
+            } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
-                    playlist = updatedPlaylist,
-                    songs = updatedSongs,
-                    totalDuration = newTotalDuration
+                    error = "Unexpected error: ${e.message}"
                 )
-            } catch (exception) {
-                handleError(exception, "Failed to remove song from playlist")
             }
         }
     }
 
-    fun addSongsToPlaylist(songs: List<Song>) {
-        viewModelScope.launch {
-            try {
-                val playlist = _uiState.value.playlist ?: return@launch
-                addSongsToPlaylistUseCase(playlist.id, songs.map { it.id })
-                
-                // Update local state
-                val currentSongs = _uiState.value.songs
-                val newSongs = songs.filter { newSong ->
-                    currentSongs.none { it.id == newSong.id }
-                }
-                val updatedSongs = currentSongs + newSongs
-                val updatedPlaylist = playlist.copy(songCount = updatedSongs.size)
-                val newTotalDuration = calculateTotalDuration(updatedSongs)
-                
-                _uiState.value = _uiState.value.copy(
-                    playlist = updatedPlaylist,
-                    songs = updatedSongs,
-                    totalDuration = newTotalDuration
-                )
-            } catch (exception) {
-                handleError(exception, "Failed to add songs to playlist")
-            }
+    /**
+     * Play entire playlist
+     */
+    fun playPlaylist() {
+        val songs = _uiState.value.filteredPlaylistSongs
+        if (songs.isNotEmpty()) {
+            playSong(songs.first())
         }
     }
 
-    fun updatePlaylist(name: String, description: String?, coverUri: String?) {
-        viewModelScope.launch {
-            try {
-                val playlist = _uiState.value.playlist ?: return@launch
-                val updatedPlaylist = playlist.copy(
-                    name = name,
-                    description = description,
-                    coverArtPath = coverUri
-                )
-                
-                updatePlaylistUseCase(updatedPlaylist)
-                _uiState.value = _uiState.value.copy(playlist = updatedPlaylist)
-            } catch (exception) {
-                handleError(exception, "Failed to update playlist")
-            }
+    /**
+     * Shuffle play playlist
+     */
+    fun shufflePlayPlaylist() {
+        val songs = _uiState.value.playlistSongs
+        if (songs.isNotEmpty()) {
+            val shuffledSongs = songs.shuffled()
+            _uiState.value = _uiState.value.copy(shuffleMode = true)
+            playSong(shuffledSongs.first())
         }
     }
 
-    fun deletePlaylist() {
-        viewModelScope.launch {
-            try {
-                val playlist = _uiState.value.playlist ?: return@launch
-                deletePlaylistUseCase(playlist.id)
-            } catch (exception) {
-                handleError(exception, "Failed to delete playlist")
-            }
-        }
-    }
+    // =================================================================================
+    // UI STATE FUNCTIONS
+    // =================================================================================
 
-    fun sharePlaylist() {
-        val playlist = _uiState.value.playlist ?: return
-        val songs = _uiState.value.songs
-        
-        android.util.Log.d("PlaylistViewModel", "Sharing playlist: ${playlist.name} with ${songs.size} songs")
-    }
-
-    fun exportPlaylist() {
-        viewModelScope.launch {
-            try {
-                val playlist = _uiState.value.playlist ?: return@launch
-                val songs = _uiState.value.songs
-                
-                // Export as M3U playlist format
-                android.util.Log.d("PlaylistViewModel", "Exporting playlist: ${playlist.name}")
-            } catch (exception) {
-                handleError(exception, "Failed to export playlist")
-            }
-        }
-    }
-
-    fun toggleSearchMode() {
-        _isSearching.value = !_isSearching.value
-        if (!_isSearching.value) {
-            _searchQuery.value = ""
-        }
-    }
-
-    fun updateSearchQuery(query: String) {
-        _searchQuery.value = query
-    }
-
-    fun updateSortOrder(sortOrder: AppConstants.SortOrder) {
-        _sortOrder.value = sortOrder
-    }
-
-    private fun calculateTotalDuration(songs: List<Song>): String {
-        val totalMs = songs.sumOf { it.duration }
-        val hours = totalMs / (1000 * 60 * 60)
-        val minutes = (totalMs % (1000 * 60 * 60)) / (1000 * 60)
-
-        return if (hours > 0) {
-            "${hours}h ${minutes}m"
-        } else {
-            "${minutes}m"
-        }
-    }
-
-    private fun handleError(exception: Throwable, message: String) {
-        android.util.Log.e("PlaylistViewModel", message, exception)
+    /**
+     * Toggle create playlist dialog
+     */
+    fun toggleCreatePlaylistDialog() {
         _uiState.value = _uiState.value.copy(
-            error = exception.message ?: message
+            showCreatePlaylistDialog = !_uiState.value.showCreatePlaylistDialog,
+            newPlaylistName = "",
+            newPlaylistDescription = ""
         )
     }
-}
 
-private data class PlaylistData(
-    val playlist: Playlist,
-    val songs: List<Song>
-)
+    /**
+     * Update new playlist name
+     */
+    fun updateNewPlaylistName(name: String) {
+        _uiState.value = _uiState.value.copy(newPlaylistName = name)
+    }
+
+    /**
+     * Update new playlist description
+     */
+    fun updateNewPlaylistDescription(description: String) {
+        _uiState.value = _uiState.value.copy(newPlaylistDescription = description)
+    }
+
+    /**
+     * Toggle edit playlist dialog
+     */
+    fun toggleEditPlaylistDialog() {
+        _uiState.value = _uiState.value.copy(
+            showEditPlaylistDialog = !_uiState.value.showEditPlaylistDialog
+        )
+    }
+
+    /**
+     * Toggle delete playlist dialog
+     */
+    fun toggleDeletePlaylistDialog() {
+        _uiState.value = _uiState.value.copy(
+            showDeletePlaylistDialog = !_uiState.value.showDeletePlaylistDialog
+        )
+    }
+
+    /**
+     * Toggle playlist options menu
+     */
+    fun togglePlaylistOptionsMenu() {
+        _uiState.value = _uiState.value.copy(
+            showPlaylistOptionsMenu = !_uiState.value.showPlaylistOptionsMenu
+        )
+    }
+
+    /**
+     * Clear navigation states
+     */
+    fun clearNavigationStates() {
+        _uiState.value = _uiState.value.copy(
+            selectedSongForPlayback = null,
+            selectedPlaylistForNavigation = null,
+            navigateToAlbum = null,
+            navigateToArtist = null
+        )
+    }
+
+    /**
+     * Dismiss undo snackbar
+     */
+    fun dismissUndoSnackbar() {
+        undoJob?.cancel()
+        _uiState.value = _uiState.value.copy(
+            showUndoSnackbar = false,
+            lastDeletedPlaylist = null,
+            lastRemovedSongs = emptyList(),
+            undoMessage = ""
+        )
+    }
+
+    // =================================================================================
+    // REFRESH AND ERROR HANDLING
+    // =================================================================================
+
+    /**
+     * Refresh all data
+     */
+    fun refreshAll() {
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isRefreshing = true)
+            
+            try {
+                // Refresh playlists
+                loadAllPlaylists()
+                
+                // Refresh current playlist if any
+                if (currentPlaylistId != -1L) {
+                    loadPlaylistDetail(currentPlaylistId)
+                }
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(
+                    error = "Failed to refresh: ${e.message}"
+                )
+            } finally {
+                _uiState.value = _uiState.value.copy(isRefreshing = false)
+            }
+        }
+    }
+
+    /**
+     * Clear error state
+     */
+    fun clearError() {
+        _uiState.value = _uiState.value.copy(
+            error = null,
+            playlistsError = null,
+            playlistDetailError = null,
+            playlistSongsError = null
+        )
+    }
+
+    // =================================================================================
+    // PRIVATE HELPER METHODS
+    // =================================================================================
+
+    private fun observeSettings() {
+        viewModelScope.launch {
+            getAppSettingsUseCase.getAppSettings()
+                .catch { e ->
+                    _uiState.value = _uiState.value.copy(
+                        error = "Failed to load settings: ${e.message}"
+                    )
+                }
+                .collect { settings ->
+                    _uiState.value = _uiState.value.copy(
+                        playlistSongsSortOrder = settings.sortOrder,
+                        playlistsSortOrder = PlaylistsSortOrder.RECENT
+                    )
+                }
+        }
+    }
+
+    private fun observeFavorites() {
+        viewModelScope.launch {
+            getFavoritesUseCase.getFavoriteSongs()
+                .catch { e ->
+                    _uiState.value = _uiState.value.copy(
+                        error = "Failed to load favorites: ${e.message}"
+                    )
+                }
+                .collect { favorites ->
+                    val favoriteIds = favorites.map { it.id }.toSet()
+                    _uiState.value = _uiState.value.copy(favoriteSongs = favoriteIds)
+                }
+        }
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        searchJob?.cancel()
+        undoJob?.cancel()
+    }
+}

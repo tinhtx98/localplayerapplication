@@ -3,217 +3,142 @@ package com.tinhtx.localplayerapplication.core.worker
 import android.content.Context
 import androidx.hilt.work.HiltWorker
 import androidx.work.*
-import androidx.work.CoroutineWorker
+import com.tinhtx.localplayerapplication.core.constants.AppConstants
 import com.tinhtx.localplayerapplication.domain.repository.MusicRepository
 import com.tinhtx.localplayerapplication.domain.repository.SettingsRepository
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
-import kotlinx.coroutines.delay
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import timber.log.Timber
 import java.util.concurrent.TimeUnit
 
+/**
+ * Worker for collecting and reporting analytics data
+ */
 @HiltWorker
 class AnalyticsWorker @AssistedInject constructor(
-    @Assisted context: Context,
-    @Assisted workerParams: WorkerParameters,
+    @Assisted private val context: Context,
+    @Assisted private val workerParams: WorkerParameters,
     private val musicRepository: MusicRepository,
     private val settingsRepository: SettingsRepository
 ) : CoroutineWorker(context, workerParams) {
 
     companion object {
-        const val TAG = "AnalyticsWorker"
-        const val WORK_NAME = "analytics_work"
-        const val PERIODIC_WORK_NAME = "periodic_analytics_work"
+        private const val TAG = "AnalyticsWorker"
+        private const val WORK_NAME = AppConstants.ANALYTICS_WORK_NAME
         
-        // Input data keys
-        const val KEY_FORCE_UPLOAD = "force_upload"
-        const val KEY_INCLUDE_USAGE_DATA = "include_usage_data"
-        
-        // Progress data keys
-        const val KEY_PROGRESS = "progress"
-        const val KEY_CURRENT_OPERATION = "current_operation"
-        
-        // Result data keys
-        const val KEY_DATA_COLLECTED = "data_collected"
-        const val KEY_UPLOAD_SUCCESS = "upload_success"
-        const val KEY_ANALYTICS_DURATION = "analytics_duration"
-
         /**
-         * Schedule one-time analytics collection
-         */
-        fun scheduleWork(
-            context: Context,
-            forceUpload: Boolean = false,
-            includeUsageData: Boolean = true
-        ): String {
-            val inputData = Data.Builder()
-                .putBoolean(KEY_FORCE_UPLOAD, forceUpload)
-                .putBoolean(KEY_INCLUDE_USAGE_DATA, includeUsageData)
-                .build()
-
-            val constraints = Constraints.Builder()
-                .setRequiredNetworkType(NetworkType.CONNECTED)
-                .setRequiresBatteryNotLow(true)
-                .build()
-
-            val workRequest = OneTimeWorkRequestBuilder<AnalyticsWorker>()
-                .setConstraints(constraints)
-                .setInputData(inputData)
-                .addTag(TAG)
-                .build()
-
-            WorkManager.getInstance(context)
-                .enqueueUniqueWork(WORK_NAME, ExistingWorkPolicy.REPLACE, workRequest)
-
-            Timber.d("$TAG - One-time analytics work scheduled")
-            return workRequest.id.toString()
-        }
-
-        /**
-         * Schedule periodic analytics collection
+         * Schedule periodic analytics reporting
          */
         fun schedulePeriodicWork(context: Context) {
             val constraints = Constraints.Builder()
                 .setRequiredNetworkType(NetworkType.CONNECTED)
                 .setRequiresBatteryNotLow(true)
-                .setRequiresDeviceIdle(false)
                 .build()
 
-            val periodicWorkRequest = PeriodicWorkRequestBuilder<AnalyticsWorker>(
-                repeatInterval = 7, // 7 days
-                repeatIntervalTimeUnit = TimeUnit.DAYS,
-                flexTimeInterval = 1, // 1 day flex
-                flexTimeIntervalUnit = TimeUnit.DAYS
+            val periodicRequest = PeriodicWorkRequestBuilder<AnalyticsWorker>(
+                AppConstants.ANALYTICS_REPORT_INTERVAL_HOURS.toLong(), TimeUnit.HOURS,
+                15, TimeUnit.MINUTES // Flex interval
             )
                 .setConstraints(constraints)
+                .setBackoffCriteria(
+                    BackoffPolicy.LINEAR,
+                    WorkRequest.MIN_BACKOFF_MILLIS,
+                    TimeUnit.MILLISECONDS
+                )
                 .addTag(TAG)
                 .build()
 
             WorkManager.getInstance(context)
                 .enqueueUniquePeriodicWork(
-                    PERIODIC_WORK_NAME,
+                    WORK_NAME,
                     ExistingPeriodicWorkPolicy.KEEP,
-                    periodicWorkRequest
+                    periodicRequest
                 )
-
-            Timber.d("$TAG - Periodic analytics work scheduled")
         }
 
         /**
-         * Cancel all analytics work
+         * Cancel analytics work
          */
         fun cancelWork(context: Context) {
             WorkManager.getInstance(context).cancelUniqueWork(WORK_NAME)
-            WorkManager.getInstance(context).cancelUniqueWork(PERIODIC_WORK_NAME)
-            Timber.d("$TAG - All analytics work cancelled")
         }
     }
 
-    override suspend fun doWork(): Result {
-        Timber.d("$TAG - Starting analytics collection")
-        
-        val startTime = System.currentTimeMillis()
-        var analyticsResult = AnalyticsResult()
+    override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
+        return@withContext try {
+            Timber.d("$TAG - Starting analytics collection")
 
-        return try {
-            // Set initial progress
-            setProgress(createProgressData(0, "Preparing analytics..."))
-
-            // Get analytics parameters
-            val forceUpload = inputData.getBoolean(KEY_FORCE_UPLOAD, false)
-            val includeUsageData = inputData.getBoolean(KEY_INCLUDE_USAGE_DATA, true)
-
-            // Check user preferences
-            val settings = settingsRepository.getAppSettings()
-            val analyticsEnabled = settings.privacySettings?.analyticsEnabled ?: false
-
-            if (!forceUpload && !analyticsEnabled) {
-                Timber.d("$TAG - Analytics disabled by user, skipping")
-                return Result.success()
+            // Check if analytics is enabled
+            val privacySettings = settingsRepository.getPrivacySettings()
+            if (!privacySettings.analyticsEnabled) {
+                Timber.d("$TAG - Analytics disabled, skipping collection")
+                return@withContext Result.success()
             }
 
             // Collect analytics data
-            analyticsResult = collectAnalyticsData(includeUsageData)
-
-            // Upload data if enabled
-            if (analyticsEnabled || forceUpload) {
-                setProgress(createProgressData(80, "Uploading analytics..."))
-                analyticsResult.uploadSuccess = uploadAnalyticsData(analyticsResult.data)
-            }
-
-            val analyticsDuration = System.currentTimeMillis() - startTime
-
-            // Create result data
-            val resultData = Data.Builder()
-                .putBoolean(KEY_DATA_COLLECTED, analyticsResult.data.isNotEmpty())
-                .putBoolean(KEY_UPLOAD_SUCCESS, analyticsResult.uploadSuccess)
-                .putLong(KEY_ANALYTICS_DURATION, analyticsDuration)
-                .build()
-
-            Timber.i("$TAG - Analytics completed successfully in ${analyticsDuration}ms")
-            Result.success(resultData)
-
-        } catch (exception: Exception) {
-            Timber.e(exception, "$TAG - Analytics collection failed")
+            val analyticsData = collectAnalyticsData()
             
-            Result.failure(createErrorData(exception.message ?: "Analytics failed"))
-        }
-    }
+            // Process and send analytics (placeholder - would integrate with analytics service)
+            processAnalyticsData(analyticsData)
 
-    private suspend fun collectAnalyticsData(includeUsageData: Boolean): AnalyticsResult {
-        val result = AnalyticsResult()
-        val analyticsData = mutableMapOf<String, Any>()
-
-        try {
-            // Basic app info
-            setProgress(createProgressData(10, "Collecting app info..."))
-            analyticsData.putAll(collectAppInfo())
-            delay(100)
-
-            // Library statistics
-            setProgress(createProgressData(30, "Collecting library stats..."))
-            analyticsData.putAll(collectLibraryStats())
-            delay(100)
-
-            // Usage statistics (if enabled)
-            if (includeUsageData) {
-                setProgress(createProgressData(50, "Collecting usage stats..."))
-                analyticsData.putAll(collectUsageStats())
-                delay(100)
-            }
-
-            // Performance metrics
-            setProgress(createProgressData(70, "Collecting performance metrics..."))
-            analyticsData.putAll(collectPerformanceMetrics())
-            delay(100)
-
-            // Error statistics
-            setProgress(createProgressData(75, "Collecting error stats..."))
-            analyticsData.putAll(collectErrorStats())
-
-            result.data = analyticsData
-            setProgress(createProgressData(80, "Analytics collection completed"))
+            Timber.d("$TAG - Analytics collection completed successfully")
+            Result.success()
 
         } catch (exception: Exception) {
-            Timber.e(exception, "$TAG - Error collecting analytics data")
-            throw exception
+            Timber.e(exception, "$TAG - Error collecting analytics")
+            
+            if (runAttemptCount < 3) {
+                Result.retry()
+            } else {
+                Result.failure()
+            }
         }
-
-        return result
     }
 
-    private suspend fun collectAppInfo(): Map<String, Any> {
-        return mapOf(
-            "app_version" to getAppVersionName(),
-            "app_version_code" to getAppVersionCode(),
-            "android_version" to android.os.Build.VERSION.RELEASE,
-            "device_model" to android.os.Build.MODEL,
-            "device_manufacturer" to android.os.Build.MANUFACTURER,
-            "timestamp" to System.currentTimeMillis(),
-            "timezone" to java.util.TimeZone.getDefault().id
+    /**
+     * Collect comprehensive analytics data
+     */
+    private suspend fun collectAnalyticsData(): AnalyticsData {
+        return AnalyticsData(
+            timestamp = System.currentTimeMillis(),
+            appUsage = collectAppUsageStats(),
+            libraryStats = collectLibraryStats(),
+            playbackStats = collectPlaybackStats(),
+            userBehavior = collectUserBehaviorStats(),
+            performanceStats = collectPerformanceStats(),
+            errorStats = collectErrorStats()
         )
     }
 
+    /**
+     * Collect app usage statistics
+     */
+    private suspend fun collectAppUsageStats(): Map<String, Any> {
+        return try {
+            val currentTime = System.currentTimeMillis()
+            val last24Hours = currentTime - (24 * 60 * 60 * 1000L)
+            val lastWeek = currentTime - (7 * 24 * 60 * 60 * 1000L)
+
+            mapOf(
+                "session_count_24h" to musicRepository.getSessionCount(last24Hours),
+                "session_count_week" to musicRepository.getSessionCount(lastWeek),
+                "total_playtime_24h" to musicRepository.getPlaytimeHours(last24Hours),
+                "total_playtime_week" to musicRepository.getPlaytimeHours(lastWeek),
+                "average_session_duration" to musicRepository.getAverageSessionDurationMinutes(),
+                "app_launches_24h" to getAppLaunchCount(last24Hours),
+                "crashes_24h" to getCrashCount(last24Hours)
+            )
+        } catch (exception: Exception) {
+            Timber.w(exception, "$TAG - Error collecting app usage stats")
+            emptyMap()
+        }
+    }
+
+    /**
+     * Collect library statistics
+     */
     private suspend fun collectLibraryStats(): Map<String, Any> {
         return try {
             mapOf(
@@ -223,7 +148,9 @@ class AnalyticsWorker @AssistedInject constructor(
                 "total_playlists" to musicRepository.getPlaylistCount(),
                 "favorite_songs" to musicRepository.getFavoriteSongCount(),
                 "total_playtime_hours" to musicRepository.getTotalPlaytimeHours(),
-                "library_size_mb" to musicRepository.getTotalLibrarySizeMB()
+                "library_size_mb" to musicRepository.getTotalLibrarySizeMB(),
+                "last_scan_count" to musicRepository.getLibraryScanCount(),
+                "average_song_duration" to musicRepository.getAverageSongDuration()
             )
         } catch (exception: Exception) {
             Timber.w(exception, "$TAG - Error collecting library stats")
@@ -231,62 +158,84 @@ class AnalyticsWorker @AssistedInject constructor(
         }
     }
 
-    private suspend fun collectUsageStats(): Map<String, Any> {
+    /**
+     * Collect playback statistics
+     */
+    private suspend fun collectPlaybackStats(): Map<String, Any> {
         return try {
-            val last30Days = System.currentTimeMillis() - (30 * 24 * 60 * 60 * 1000L)
-            
+            val last24Hours = System.currentTimeMillis() - (24 * 60 * 60 * 1000L)
+            val mostPlayedSongs = musicRepository.getMostPlayedSongs(10)
+            val mostPlayedArtists = musicRepository.getMostPlayedArtists(10)
+
             mapOf(
-                "sessions_last_30_days" to musicRepository.getSessionCount(last30Days),
-                "playtime_last_30_days_hours" to musicRepository.getPlaytimeHours(last30Days),
-                "most_played_songs" to musicRepository.getMostPlayedSongs(10).map { 
-                    mapOf("title" to it.title, "artist" to it.artist, "play_count" to it.playCount)
-                },
-                "most_played_artists" to musicRepository.getMostPlayedArtists(10).map {
-                    mapOf("name" to it.name, "play_count" to it.playCount)
-                },
-                "shuffle_usage_percentage" to musicRepository.getShuffleUsagePercentage(),
-                "repeat_usage_percentage" to musicRepository.getRepeatUsagePercentage(),
-                "average_session_duration_minutes" to musicRepository.getAverageSessionDurationMinutes(),
-                "skip_rate_percentage" to musicRepository.getSkipRatePercentage()
+                "plays_24h" to musicRepository.getPlayCountSince(last24Hours),
+                "completion_rate" to musicRepository.getAverageCompletionRate(last24Hours),
+                "skip_rate" to musicRepository.getSkipRatePercentage(),
+                "shuffle_usage" to musicRepository.getShuffleUsagePercentage(),
+                "repeat_usage" to musicRepository.getRepeatUsagePercentage(),
+                "most_played_songs_count" to mostPlayedSongs.size,
+                "most_played_artists_count" to mostPlayedArtists.size,
+                "crossfade_usage" to getCrossfadeUsage(),
+                "equalizer_usage" to getEqualizerUsage()
             )
         } catch (exception: Exception) {
-            Timber.w(exception, "$TAG - Error collecting usage stats")
+            Timber.w(exception, "$TAG - Error collecting playback stats")
             emptyMap()
         }
     }
 
-    private suspend fun collectPerformanceMetrics(): Map<String, Any> {
+    /**
+     * Collect user behavior statistics
+     */
+    private suspend fun collectUserBehaviorStats(): Map<String, Any> {
         return try {
-            val runtime = Runtime.getRuntime()
-            val memoryInfo = runtime.let {
-                mapOf(
-                    "max_memory_mb" to (it.maxMemory() / 1024 / 1024),
-                    "total_memory_mb" to (it.totalMemory() / 1024 / 1024),
-                    "free_memory_mb" to (it.freeMemory() / 1024 / 1024),
-                    "used_memory_mb" to ((it.totalMemory() - it.freeMemory()) / 1024 / 1024)
-                )
-            }
-
             mapOf(
-                "memory_info" to memoryInfo,
-                "app_start_time_ms" to getAppStartTime(),
-                "library_scan_count" to musicRepository.getLibraryScanCount(),
-                "cache_size_mb" to getCacheSizeMB(),
-                "database_size_mb" to getDatabaseSizeMB(),
-                "crash_count_last_30_days" to getCrashCount()
+                "search_queries_24h" to getSearchQueryCount(),
+                "playlist_creations_24h" to getPlaylistCreationCount(),
+                "favorites_added_24h" to getFavoritesAddedCount(),
+                "settings_changes_24h" to getSettingsChangeCount(),
+                "theme_preference" to getCurrentTheme(),
+                "grid_size_preference" to getCurrentGridSize(),
+                "notification_interactions_24h" to getNotificationInteractionCount()
             )
         } catch (exception: Exception) {
-            Timber.w(exception, "$TAG - Error collecting performance metrics")
+            Timber.w(exception, "$TAG - Error collecting user behavior stats")
             emptyMap()
         }
     }
 
+    /**
+     * Collect performance statistics
+     */
+    private suspend fun collectPerformanceStats(): Map<String, Any> {
+        return try {
+            mapOf(
+                "app_start_time_ms" to getAverageAppStartTime(),
+                "library_scan_time_ms" to getAverageLibraryScanTime(),
+                "search_response_time_ms" to getAverageSearchResponseTime(),
+                "memory_usage_mb" to getCurrentMemoryUsage(),
+                "cache_size_mb" to getCacheSize(),
+                "database_size_mb" to getDatabaseSize()
+            )
+        } catch (exception: Exception) {
+            Timber.w(exception, "$TAG - Error collecting performance stats")
+            emptyMap()
+        }
+    }
+
+    /**
+     * Collect error statistics
+     */
     private suspend fun collectErrorStats(): Map<String, Any> {
         return try {
+            val last24Hours = System.currentTimeMillis() - (24 * 60 * 60 * 1000L)
+            
             mapOf(
-                "playback_errors_last_30_days" to musicRepository.getPlaybackErrorCount(),
-                "network_errors_last_30_days" to musicRepository.getNetworkErrorCount(),
-                "permission_errors_last_30_days" to musicRepository.getPermissionErrorCount()
+                "playback_errors_24h" to musicRepository.getPlaybackErrorCount(),
+                "network_errors_24h" to musicRepository.getNetworkErrorCount(),
+                "permission_errors_24h" to musicRepository.getPermissionErrorCount(),
+                "crash_count_24h" to getCrashCount(last24Hours),
+                "anr_count_24h" to getANRCount(last24Hours)
             )
         } catch (exception: Exception) {
             Timber.w(exception, "$TAG - Error collecting error stats")
@@ -294,96 +243,72 @@ class AnalyticsWorker @AssistedInject constructor(
         }
     }
 
-    private suspend fun uploadAnalyticsData(data: Map<String, Any>): Boolean {
-        return try {
-            setProgress(createProgressData(90, "Uploading to analytics service..."))
+    /**
+     * Process and send analytics data
+     */
+    private suspend fun processAnalyticsData( AnalyticsData) {
+        try {
+            // Log analytics data for debugging
+            Timber.d("$TAG - Analytics data collected: ${data.summary()}")
             
-            // Here you would implement the actual upload to your analytics service
-            // For example: Firebase Analytics, Google Analytics, custom backend, etc.
+            // Here you would send data to your analytics service
+            // For example: Firebase Analytics, Mixpanel, etc.
+            // sendToAnalyticsService(data)
             
-            // Simulate upload
-            delay(1000)
+            // Store locally for later sync if needed
+            storeAnalyticsLocally(data)
             
-            // Log anonymized data locally for debugging
-            Timber.d("$TAG - Analytics data collected: ${data.keys.joinToString()}")
-            
-            true // Success
         } catch (exception: Exception) {
-            Timber.e(exception, "$TAG - Error uploading analytics data")
-            false // Failure
+            Timber.e(exception, "$TAG - Error processing analytics data")
+            throw exception
         }
     }
 
-    private fun getAppVersionName(): String {
-        return try {
-            val packageInfo = applicationContext.packageManager.getPackageInfo(
-                applicationContext.packageName, 0
-            )
-            packageInfo.versionName ?: "Unknown"
-        } catch (exception: Exception) {
-            "Unknown"
+    /**
+     * Store analytics data locally
+     */
+    private suspend fun storeAnalyticsLocally( AnalyticsData) {
+        // Implementation would store in local database for later sync
+        // This is a placeholder
+    }
+
+    // Placeholder methods for data collection - these would be implemented based on your analytics needs
+    private fun getAppLaunchCount(since: Long): Int = 0
+    private fun getCrashCount(since: Long): Int = 0
+    private fun getCrossfadeUsage(): Float = 0f
+    private fun getEqualizerUsage(): Float = 0f
+    private fun getSearchQueryCount(): Int = 0
+    private fun getPlaylistCreationCount(): Int = 0
+    private fun getFavoritesAddedCount(): Int = 0
+    private fun getSettingsChangeCount(): Int = 0
+    private fun getCurrentTheme(): String = "system"
+    private fun getCurrentGridSize(): String = "medium"
+    private fun getNotificationInteractionCount(): Int = 0
+    private fun getAverageAppStartTime(): Long = 0L
+    private fun getAverageLibraryScanTime(): Long = 0L
+    private fun getAverageSearchResponseTime(): Long = 0L
+    private fun getCurrentMemoryUsage(): Long = 0L
+    private fun getCacheSize(): Long = 0L
+    private fun getDatabaseSize(): Long = 0L
+    private fun getANRCount(since: Long): Int = 0
+
+    /**
+     * Analytics data structure
+     */
+    data class AnalyticsData(
+        val timestamp: Long,
+        val appUsage: Map<String, Any>,
+        val libraryStats: Map<String, Any>,
+        val playbackStats: Map<String, Any>,
+        val userBehavior: Map<String, Any>,
+        val performanceStats: Map<String, Any>,
+        val errorStats: Map<String, Any>
+    ) {
+        fun summary(): String {
+            return "Analytics[${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(java.util.Date(timestamp))}] - " +
+                    "Library: ${libraryStats["total_songs"]} songs, " +
+                    "Usage: ${appUsage["session_count_24h"]} sessions, " +
+                    "Playback: ${playbackStats["plays_24h"]} plays"
         }
     }
-
-    private fun getAppVersionCode(): Long {
-        return try {
-            val packageInfo = applicationContext.packageManager.getPackageInfo(
-                applicationContext.packageName, 0
-            )
-            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
-                packageInfo.longVersionCode
-            } else {
-                @Suppress("DEPRECATION")
-                packageInfo.versionCode.toLong()
-            }
-        } catch (exception: Exception) {
-            0L
-        }
-    }
-
-    private fun getAppStartTime(): Long {
-        // This would be stored when app starts
-        return System.currentTimeMillis() // Placeholder
-    }
-
-    private fun getCacheSizeMB(): Long {
-        return try {
-            val cacheDir = applicationContext.cacheDir
-            (cacheDir.walkTopDown().filter { it.isFile }.sumOf { it.length() }) / 1024 / 1024
-        } catch (exception: Exception) {
-            0L
-        }
-    }
-
-    private fun getDatabaseSizeMB(): Long {
-        return try {
-            val dbFile = applicationContext.getDatabasePath("music_database")
-            (dbFile?.length() ?: 0L) / 1024 / 1024
-        } catch (exception: Exception) {
-            0L
-        }
-    }
-
-    private fun getCrashCount(): Int {
-        // This would be tracked by crash reporting service
-        return 0 // Placeholder
-    }
-
-    private fun createProgressData(progress: Int, message: String): Data {
-        return Data.Builder()
-            .putInt(KEY_PROGRESS, progress)
-            .putString(KEY_CURRENT_OPERATION, message)
-            .build()
-    }
-
-    private fun createErrorData(error: String): Data {
-        return Data.Builder()
-            .putString("error", error)
-            .build()
-    }
-
-    private data class AnalyticsResult(
-        var data: Map<String, Any> = emptyMap(),
-        var uploadSuccess: Boolean = false
-    )
 }

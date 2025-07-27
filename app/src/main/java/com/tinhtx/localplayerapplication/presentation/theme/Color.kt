@@ -58,3 +58,9 @@ val PlayerBackground = Color(0xFF121212)
 val PlayerSurface = Color(0xFF1E1E1E)
 val PlayerOnSurface = Color(0xFFE1E1E1)
 val PlayerAccent = Color(0xFF1DB954) // Spotify-like green
+
+// Music app specific colors
+val MusicPrimary = Color(0xFF1DB954) // Spotify green
+val MusicPrimaryVariant = Color(0xFF1ED760)
+val MusicSecondary = Color(0xFF191414) // Dark background
+val MusicAccent = Color(0xFFFFFFFF) // White accent

@@ -1,247 +1,298 @@
 package com.tinhtx.localplayerapplication.presentation.screens.library.components
 
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
-import androidx.compose.material3.windowsizeclass.WindowSizeClass
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.tinhtx.localplayerapplication.core.constants.AppConstants
 import com.tinhtx.localplayerapplication.domain.model.Playlist
-import com.tinhtx.localplayerapplication.presentation.components.music.PlaylistCard
-import com.tinhtx.localplayerapplication.presentation.components.music.HorizontalPlaylistCard
-import com.tinhtx.localplayerapplication.presentation.theme.getHorizontalPadding
+import com.tinhtx.localplayerapplication.presentation.components.image.CoilAsyncImage
+import com.tinhtx.localplayerapplication.presentation.screens.library.GridSize
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun PlaylistsTab(
     playlists: List<Playlist>,
-    viewMode: AppConstants.ViewMode,
-    gridSize: AppConstants.GridSize,
-    onPlaylistClick: (Long) -> Unit,
-    onCreatePlaylistClick: () -> Unit,
-    windowSizeClass: WindowSizeClass,
+    gridSize: GridSize,
+    isSelectionMode: Boolean,
+    selectedItems: Set<Long>,
+    onPlaylistClick: (Playlist) -> Unit,
+    onPlaylistLongClick: (Playlist) -> Unit,
+    onToggleSelection: (Long) -> Unit,
+    onPlayPlaylist: (Playlist) -> Unit,
+    onCreatePlaylist: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val horizontalPadding = windowSizeClass.getHorizontalPadding()
-    
-    Box(modifier = modifier.fillMaxSize()) {
-        when (viewMode) {
-            AppConstants.ViewMode.LIST -> {
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(
-                        horizontal = horizontalPadding,
-                        vertical = 8.dp,
-                        bottom = 100.dp
-                    ),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    // Create new playlist item
-                    item {
-                        CreatePlaylistItem(
-                            onClick = onCreatePlaylistClick,
-                            modifier = Modifier.animateItemPlacement()
-                        )
-                    }
-                    
-                    items(
-                        items = playlists,
-                        key = { it.id }
-                    ) { playlist ->
-                        HorizontalPlaylistCard(
-                            playlist = playlist,
-                            onClick = { onPlaylistClick(playlist.id) },
-                            modifier = Modifier.animateItemPlacement()
-                        )
-                    }
-                }
-            }
-            
-            AppConstants.ViewMode.GRID -> {
-                val columns = when (gridSize) {
-                    AppConstants.GridSize.SMALL -> GridCells.Adaptive(140.dp)
-                    AppConstants.GridSize.MEDIUM -> GridCells.Adaptive(160.dp)
-                    AppConstants.GridSize.LARGE -> GridCells.Adaptive(180.dp)
-                }
-                
-                LazyVerticalGrid(
-                    columns = columns,
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(
-                        horizontal = horizontalPadding,
-                        vertical = 8.dp,
-                        bottom = 100.dp
-                    ),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    // Create new playlist item
-                    item {
-                        CreatePlaylistGridItem(
-                            onClick = onCreatePlaylistClick,
-                            modifier = Modifier.animateItemPlacement()
-                        )
-                    }
-                    
-                    items(
-                        items = playlists,
-                        key = { it.id }
-                    ) { playlist ->
-                        PlaylistCard(
-                            playlist = playlist,
-                            onClick = { onPlaylistClick(playlist.id) },
-                            modifier = Modifier.animateItemPlacement()
-                        )
-                    }
-                }
-            }
+    val gridColumns = when (gridSize) {
+        GridSize.SMALL -> GridCells.Adaptive(140.dp)
+        GridSize.MEDIUM -> GridCells.Adaptive(180.dp)
+        GridSize.LARGE -> GridCells.Adaptive(220.dp)
+    }
+
+    LazyVerticalGrid(
+        columns = gridColumns,
+        modifier = modifier,
+        contentPadding = PaddingValues(16.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        // Create new playlist item
+        item {
+            CreatePlaylistCard(
+                onClick = onCreatePlaylist,
+                modifier = Modifier.animateItemPlacement()
+            )
         }
         
-        // Empty state
-        if (playlists.isEmpty()) {
-            EmptyPlaylistsState(
-                onCreatePlaylistClick = onCreatePlaylistClick,
-                modifier = Modifier.fillMaxSize()
+        // Playlist items
+        items(
+            items = playlists,
+            key = { playlist -> playlist.id }
+        ) { playlist ->
+            PlaylistGridItem(
+                playlist = playlist,
+                isSelected = selectedItems.contains(playlist.id),
+                isSelectionMode = isSelectionMode,
+                onClick = { onPlaylistClick(playlist) },
+                onLongClick = { onPlaylistLongClick(playlist) },
+                onToggleSelection = { onToggleSelection(playlist.id) },
+                onPlayClick = { onPlayPlaylist(playlist) },
+                modifier = Modifier.animateItemPlacement()
             )
         }
     }
 }
 
 @Composable
-private fun CreatePlaylistItem(
+private fun CreatePlaylistCard(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Card(
+        modifier = modifier
+            .fillMaxWidth()
+            .aspectRatio(0.8f),
         onClick = onClick,
-        modifier = modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
+            containerColor = MaterialTheme.colorScheme.primaryContainer
         ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
-        ) {
-            Icon(
-                imageVector = Icons.Default.Add,
-                contentDescription = null,
-                modifier = Modifier.size(48.dp),
-                tint = MaterialTheme.colorScheme.primary
-            )
-            
-            Spacer(modifier = Modifier.width(16.dp))
-            
-            Column {
-                Text(
-                    text = "Create New Playlist",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.primary
-                )
-                Text(
-                    text = "Add songs to your custom playlist",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun CreatePlaylistGridItem(
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Card(
-        onClick = onClick,
-        modifier = modifier.aspectRatio(1f),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
-        ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
     ) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(16.dp),
-            horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally,
+            horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
             Icon(
                 imageVector = Icons.Default.Add,
                 contentDescription = null,
                 modifier = Modifier.size(48.dp),
-                tint = MaterialTheme.colorScheme.primary
+                tint = MaterialTheme.colorScheme.onPrimaryContainer
             )
             
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(12.dp))
             
             Text(
                 text = "Create Playlist",
-                style = MaterialTheme.typography.titleSmall,
-                color = MaterialTheme.colorScheme.primary,
-                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onPrimaryContainer
+            )
+            
+            Text(
+                text = "Start organizing your music",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
             )
         }
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun EmptyPlaylistsState(
-    onCreatePlaylistClick: () -> Unit,
+private fun PlaylistGridItem(
+    playlist: Playlist,
+    isSelected: Boolean,
+    isSelectionMode: Boolean,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit,
+    onToggleSelection: () -> Unit,
+    onPlayClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Column(
-        modifier = modifier.padding(32.dp),
-        horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
+    Card(
+        modifier = modifier
+            .combinedClickable(
+                onClick = if (isSelectionMode) onToggleSelection else onClick,
+                onLongClick = onLongClick
+            ),
+        colors = CardDefaults.cardColors(
+            containerColor = if (isSelected) {
+                MaterialTheme.colorScheme.primaryContainer
+            } else {
+                MaterialTheme.colorScheme.surface
+            }
+        ),
+        elevation = CardDefaults.cardElevation(
+            defaultElevation = if (isSelected) 6.dp else 3.dp
+        )
     ) {
-        Icon(
-            imageVector = Icons.Default.QueueMusic,
-            contentDescription = null,
-            modifier = Modifier.size(64.dp),
-            tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)
-        )
-        
-        Spacer(modifier = Modifier.height(16.dp))
-        
-        Text(
-            text = "No playlists yet",
-            style = MaterialTheme.typography.headlineSmall,
-            color = MaterialTheme.colorScheme.onSurface
-        )
-        
-        Text(
-            text = "Create your first playlist to organize your favorite songs",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
-            textAlign = androidx.compose.ui.text.style.TextAlign.Center
-        )
-        
-        Spacer(modifier = Modifier.height(24.dp))
-        
-        Button(
-            onClick = onCreatePlaylistClick,
-            modifier = Modifier.fillMaxWidth(0.6f)
-        ) {
-            Icon(
-                imageVector = Icons.Default.Add,
-                contentDescription = null,
-                modifier = Modifier.size(18.dp)
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-            Text("Create Playlist")
+        Column {
+            // Playlist cover section
+            Box {
+                if (playlist.albumArtPath != null) {
+                    CoilAsyncImage(
+                        imageUrl = playlist.albumArtPath,
+                        contentDescription = "Cover for ${playlist.name}",
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .aspectRatio(1f),
+                        contentScale = ContentScale.Crop
+                    )
+                } else {
+                    // Default playlist cover with gradient
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .aspectRatio(1f)
+                            .background(
+                                Brush.linearGradient(
+                                    colors = listOf(
+                                        MaterialTheme.colorScheme.primary,
+                                        MaterialTheme.colorScheme.secondary,
+                                        MaterialTheme.colorScheme.tertiary
+                                    )
+                                )
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.PlaylistPlay,
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size(48.dp)
+                        )
+                    }
+                }
+                
+                // Selection indicator
+                if (isSelectionMode && isSelected) {
+                    Icon(
+                        imageVector = Icons.Default.CheckCircle,
+                        contentDescription = "Selected",
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(8.dp)
+                            .size(24.dp)
+                    )
+                }
+                
+                // Play button overlay
+                if (!isSelectionMode) {
+                    FloatingActionButton(
+                        onClick = onPlayClick,
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(12.dp)
+                            .size(40.dp),
+                        containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.9f)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.PlayArrow,
+                            contentDescription = "Play playlist",
+                            tint = MaterialTheme.colorScheme.onPrimary,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                }
+            }
+            
+            // Playlist info
+            Column(
+                modifier = Modifier.padding(12.dp)
+            ) {
+                Text(
+                    text = playlist.name,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                
+                Spacer(modifier = Modifier.height(4.dp))
+                
+                Text(
+                    text = "${playlist.songCount} songs",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                
+                Spacer(modifier = Modifier.height(6.dp))
+                
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = formatDuration(playlist.totalDuration),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
+                    )
+                    
+                    // Privacy indicator
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = if (playlist.isPublic) Icons.Default.Public else Icons.Default.Lock,
+                            contentDescription = if (playlist.isPublic) "Public playlist" else "Private playlist",
+                            modifier = Modifier.size(12.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                        )
+                        
+                        Spacer(modifier = Modifier.width(4.dp))
+                        
+                        Text(
+                            text = if (playlist.isPublic) "Public" else "Private",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                        )
+                    }
+                }
+            }
         }
+    }
+}
+
+private fun formatDuration(durationMs: Long): String {
+    val totalSeconds = durationMs / 1000
+    val hours = totalSeconds / 3600
+    val minutes = (totalSeconds % 3600) / 60
+    
+    return when {
+        hours > 0 -> "${hours}h ${minutes}m"
+        minutes > 0 -> "${minutes}m"
+        else -> "<1m"
     }
 }

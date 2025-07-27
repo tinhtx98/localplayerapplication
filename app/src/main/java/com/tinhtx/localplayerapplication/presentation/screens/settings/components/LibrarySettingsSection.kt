@@ -7,100 +7,92 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import com.tinhtx.localplayerapplication.domain.model.*
 
 @Composable
 fun LibrarySettingsSection(
-    settings: LibrarySettings,
-    onSettingChanged: (LibrarySettingType, Any) -> Unit,
+    libraryStats: String,
+    lastScanTime: String,
+    isScanning: Boolean,
+    scanProgress: Float,
+    scanOnStartup: Boolean,
+    includeSubfolders: Boolean,
     onScanLibrary: () -> Unit,
+    onCancelScan: () -> Unit,
+    onToggleScanOnStartup: () -> Unit,
+    onToggleIncludeSubfolders: () -> Unit,
+    onManageFolders: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Card(
-        modifier = modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
-        ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-    ) {
+    Column(modifier = modifier) {
+        SettingsSectionHeader(
+            title = "Library",
+            icon = Icons.Default.LibraryMusic
+        )
+        
+        Spacer(modifier = Modifier.height(8.dp))
+        
         Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            // Scan Library Button
-            SettingActionItem(
-                title = "Scan Library",
-                subtitle = "Refresh your music library",
-                icon = Icons.Default.Refresh,
-                actionText = "Scan Now",
-                onClick = onScanLibrary
+            // Library stats
+            SettingItem(
+                title = "Music Library",
+                subtitle = libraryStats,
+                icon = Icons.Default.MusicNote,
+                enabled = false
             )
-            
-            HorizontalDivider()
-            
-            // Auto Scan
-            SettingSwitchItem(
-                title = "Auto Scan",
-                subtitle = "Automatically scan for new music",
-                icon = Icons.Default.AutoMode,
-                checked = settings.autoScan,
-                onCheckedChange = { 
-                    onSettingChanged(LibrarySettingType.AUTO_SCAN, it)
-                }
+
+            // Last scan time
+            SettingItem(
+                title = "Last Scan",
+                subtitle = lastScanTime,
+                icon = Icons.Default.Update,
+                enabled = false
             )
-            
-            HorizontalDivider()
-            
-            // Ignore Short Tracks
-            SettingSwitchItem(
-                title = "Ignore Short Tracks",
-                subtitle = "Skip tracks shorter than minimum duration",
-                icon = Icons.Default.SkipNext,
-                checked = settings.ignoreShortTracks,
-                onCheckedChange = { 
-                    onSettingChanged(LibrarySettingType.IGNORE_SHORT_TRACKS, it)
-                }
-            )
-            
-            // Min Track Duration (only show if ignore short tracks is enabled)
-            if (settings.ignoreShortTracks) {
-                SettingSliderItem(
-                    title = "Minimum Track Duration",
-                    subtitle = "${settings.minTrackDuration} seconds",
-                    icon = Icons.Default.Timer,
-                    value = settings.minTrackDuration.toFloat(),
-                    valueRange = 5f..60f,
-                    steps = 10,
-                    onValueChange = { 
-                        onSettingChanged(LibrarySettingType.MIN_TRACK_DURATION, it.toInt())
-                    }
+
+            // Scan library
+            if (isScanning) {
+                SettingProgressItem(
+                    title = "Scanning Library",
+                    subtitle = "Finding music files...",
+                    icon = Icons.Default.Search,
+                    progress = scanProgress,
+                    progressText = "${(scanProgress * 100).toInt()}%",
+                    onClick = onCancelScan
+                )
+            } else {
+                SettingItem(
+                    title = "Scan Library",
+                    subtitle = "Search for new music files",
+                    icon = Icons.Default.Search,
+                    onClick = onScanLibrary
                 )
             }
-            
-            HorizontalDivider()
-            
-            // Download Artwork
+
+            // Scan on startup
             SettingSwitchItem(
-                title = "Download Artwork",
-                subtitle = "Download missing album artwork",
-                icon = Icons.Default.Download,
-                checked = settings.downloadArtwork,
-                onCheckedChange = { 
-                    onSettingChanged(LibrarySettingType.DOWNLOAD_ARTWORK, it)
-                }
+                title = "Scan on Startup",
+                subtitle = "Automatically scan for new music when app starts",
+                icon = Icons.Default.PowerSettingsNew,
+                checked = scanOnStartup,
+                onCheckedChange = { onToggleScanOnStartup() }
             )
-            
-            HorizontalDivider()
-            
-            // Download Lyrics
+
+            // Include subfolders
             SettingSwitchItem(
-                title = "Download Lyrics",
-                subtitle = "Download lyrics from online sources",
-                icon = Icons.Default.Lyrics,
-                checked = settings.downloadLyrics,
-                onCheckedChange = { 
-                    onSettingChanged(LibrarySettingType.DOWNLOAD_LYRICS, it)
-                }
+                title = "Include Subfolders",
+                subtitle = "Scan all subfolders recursively",
+                icon = Icons.Default.Folder,
+                checked = includeSubfolders,
+                onCheckedChange = { onToggleIncludeSubfolders() }
+            )
+
+            // Manage folders
+            SettingItem(
+                title = "Manage Folders",
+                subtitle = "Choose which folders to scan",
+                icon = Icons.Default.FolderOpen,
+                onClick = onManageFolders
             )
         }
     }

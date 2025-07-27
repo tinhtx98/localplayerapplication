@@ -1,34 +1,30 @@
 package com.tinhtx.localplayerapplication.domain.model
 
-sealed class AudioFocusState {
-    object Gained : AudioFocusState()
-    object Lost : AudioFocusState()
-    object LostTransient : AudioFocusState()
-    object LostTransientCanDuck : AudioFocusState()
+/**
+ * Enum representing audio focus states
+ */
+enum class AudioFocusState {
+    NONE,               // No audio focus
+    GAIN,               // Full audio focus
+    LOSS,               // Lost audio focus permanently
+    LOSS_TRANSIENT,     // Lost audio focus temporarily
+    LOSS_TRANSIENT_CAN_DUCK;  // Lost audio focus but can duck volume
+    
+    val displayName: String
+        get() = when (this) {
+            NONE -> "None"
+            GAIN -> "Gained"
+            LOSS -> "Lost"
+            LOSS_TRANSIENT -> "Lost Temporarily"
+            LOSS_TRANSIENT_CAN_DUCK -> "Ducked"
+        }
+    
+    val canPlayback: Boolean
+        get() = this == GAIN || this == LOSS_TRANSIENT_CAN_DUCK
     
     val shouldPause: Boolean
-        get() = when (this) {
-            is Gained -> false
-            is Lost -> true
-            is LostTransient -> true
-            is LostTransientCanDuck -> false
-        }
+        get() = this == LOSS || this == LOSS_TRANSIENT
     
     val shouldDuck: Boolean
-        get() = this is LostTransientCanDuck
-    
-    val canResume: Boolean
-        get() = this is Gained
-    
-    companion object {
-        fun fromFocusChange(focusChange: Int): AudioFocusState {
-            return when (focusChange) {
-                android.media.AudioManager.AUDIOFOCUS_GAIN -> Gained
-                android.media.AudioManager.AUDIOFOCUS_LOSS -> Lost
-                android.media.AudioManager.AUDIOFOCUS_LOSS_TRANSIENT -> LostTransient
-                android.media.AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK -> LostTransientCanDuck
-                else -> Lost
-            }
-        }
-    }
+        get() = this == LOSS_TRANSIENT_CAN_DUCK
 }

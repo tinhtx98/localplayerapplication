@@ -1,258 +1,258 @@
 package com.tinhtx.localplayerapplication.data.repository
 
-import androidx.datastore.core.DataStore
-import androidx.datastore.preferences.core.Preferences
-import androidx.datastore.preferences.core.edit
-import androidx.datastore.preferences.core.emptyPreferences
-import com.tinhtx.localplayerapplication.core.constants.AppConstants
-import com.tinhtx.localplayerapplication.core.di.SettingsPreferencesDataStore
-import com.tinhtx.localplayerapplication.core.di.UserPreferencesDataStore
 import com.tinhtx.localplayerapplication.data.local.datastore.PreferencesKeys
-import com.tinhtx.localplayerapplication.data.local.datastore.SettingsPreferences
 import com.tinhtx.localplayerapplication.data.local.datastore.UserPreferences
 import com.tinhtx.localplayerapplication.domain.model.UserProfile
 import com.tinhtx.localplayerapplication.domain.repository.UserPreferencesRepository
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.catch
-import kotlinx.coroutines.flow.map
-import kotlinx.serialization.encodeToString
-import kotlinx.serialization.json.Json
-import java.io.IOException
 import javax.inject.Inject
 import javax.inject.Singleton
 
+/**
+ * Implementation of UserPreferencesRepository using DataStore
+ */
 @Singleton
 class UserPreferencesRepositoryImpl @Inject constructor(
-    @UserPreferencesDataStore private val userPreferencesDataStore: DataStore<Preferences>,
-    @SettingsPreferencesDataStore private val settingsPreferencesDataStore: DataStore<Preferences>
+    private val userPreferences: UserPreferences
 ) : UserPreferencesRepository {
     
-    override val userProfile: Flow<UserProfile> = userPreferencesDataStore.data
-        .catch { exception ->
-            if (exception is IOException) {
-                emit(emptyPreferences())
-            } else {
-                throw exception
-            }
-        }
-        .map { preferences ->
-            UserProfile(
-                name = preferences[PreferencesKeys.USER_NAME] ?: AppConstants.DEFAULT_USER_NAME,
-                profileImageUri = preferences[PreferencesKeys.PROFILE_IMAGE_URI] ?: "",
-                themeMode = AppConstants.ThemeMode.valueOf(
-                    preferences[PreferencesKeys.THEME_MODE] ?: AppConstants.ThemeMode.SYSTEM.name
-                ),
-                isFirstLaunch = preferences[PreferencesKeys.IS_FIRST_LAUNCH] ?: true
-            )
-        }
+    // User Profile Operations - Mapped từ UserPreferences methods
+    override fun getUserProfile(): Flow<UserProfile> {
+        return userPreferences.userProfile
+    }
+    
+    override suspend fun updateUserProfile(userProfile: UserProfile) {
+        userPreferences.updateUserProfile(userProfile)
+    }
     
     override suspend fun updateUserName(name: String) {
-        userPreferencesDataStore.edit { preferences ->
-            preferences[PreferencesKeys.USER_NAME] = name
+        userPreferences.setString(PreferencesKeys.USER_NAME, name)
+    }
+    
+    override suspend fun updateUserEmail(email: String) {
+        userPreferences.setString(PreferencesKeys.USER_EMAIL, email)
+    }
+    
+    override suspend fun updateUserAvatar(avatarPath: String?) {
+        avatarPath?.let {
+            userPreferences.setString(PreferencesKeys.USER_AVATAR_PATH, it)
         }
     }
     
-    override suspend fun updateProfileImage(uri: String) {
-        userPreferencesDataStore.edit { preferences ->
-            preferences[PreferencesKeys.PROFILE_IMAGE_URI] = uri
+    override suspend fun updateLastLogin() {
+        userPreferences.setLong(PreferencesKeys.USER_LAST_LOGIN, System.currentTimeMillis())
+    }
+    
+    override suspend fun clearUserProfile() {
+        userPreferences.remove(PreferencesKeys.USER_NAME)
+        userPreferences.remove(PreferencesKeys.USER_EMAIL)
+        userPreferences.remove(PreferencesKeys.USER_AVATAR_PATH)
+    }
+    
+    // Simple Preference Operations - Mapped từ UserPreferences methods
+    override suspend fun setString(key: String, value: String) {
+        // Would need to map string key to PreferencesKey - simplified
+        userPreferences.setString(PreferencesKeys.USER_NAME, value) // Placeholder
+    }
+    
+    override suspend fun getString(key: String, defaultValue: String): Flow<String> {
+        return userPreferences.getString(PreferencesKeys.USER_NAME, defaultValue) // Placeholder
+    }
+    
+    override suspend fun setBoolean(key: String, value: Boolean) {
+        userPreferences.setBoolean(PreferencesKeys.FIRST_LAUNCH, value) // Placeholder
+    }
+    
+    override suspend fun getBoolean(key: String, defaultValue: Boolean): Flow<Boolean> {
+        return userPreferences.getBoolean(PreferencesKeys.FIRST_LAUNCH, defaultValue) // Placeholder
+    }
+    
+    override suspend fun setInt(key: String, value: Int) {
+        userPreferences.setInt(PreferencesKeys.SCAN_INTERVAL_HOURS, value) // Placeholder
+    }
+    
+    override suspend fun getInt(key: String, defaultValue: Int): Flow<Int> {
+        return userPreferences.getInt(PreferencesKeys.SCAN_INTERVAL_HOURS, defaultValue) // Placeholder
+    }
+    
+    override suspend fun setLong(key: String, value: Long) {
+        userPreferences.setLong(PreferencesKeys.USER_LAST_LOGIN, value)
+    }
+    
+    override suspend fun getLong(key: String, defaultValue: Long): Flow<Long> {
+        return userPreferences.getLong(PreferencesKeys.USER_LAST_LOGIN, defaultValue)
+    }
+    
+    override suspend fun setFloat(key: String, value: Float) {
+        userPreferences.setFloat(PreferencesKeys.PLAYBACK_SPEED, value)
+    }
+    
+    override suspend fun getFloat(key: String, defaultValue: Float): Flow<Float> {
+        return userPreferences.getFloat(PreferencesKeys.PLAYBACK_SPEED, defaultValue)
+    }
+    
+    // List Preferences - Basic implementation
+    override suspend fun setStringList(key: String, value: List<String>) {
+        // Would need proper key mapping and list serialization
+    }
+    
+    override suspend fun getStringList(key: String, defaultValue: List<String>): Flow<List<String>> {
+        return kotlinx.coroutines.flow.flowOf(defaultValue) // Placeholder
+    }
+    
+    override suspend fun setLongList(key: String, value: List<Long>) {
+        // Would need proper key mapping and list serialization
+    }
+    
+    override suspend fun getLongList(key: String, defaultValue: List<Long>): Flow<List<Long>> {
+        return kotlinx.coroutines.flow.flowOf(defaultValue) // Placeholder
+    }
+    
+    // Session Management - Using available preference keys
+    override suspend fun saveLastPlayedSong(songId: Long, position: Long) {
+        userPreferences.setLong(PreferencesKeys.LAST_PLAYED_SONG_ID, songId)
+        userPreferences.setLong(PreferencesKeys.LAST_PLAYED_POSITION, position)
+    }
+    
+    override suspend fun getLastPlayedSong(): Flow<Pair<Long, Long>> {
+        return kotlinx.coroutines.flow.combine(
+            userPreferences.getLong(PreferencesKeys.LAST_PLAYED_SONG_ID, 0L),
+            userPreferences.getLong(PreferencesKeys.LAST_PLAYED_POSITION, 0L)
+        ) { songId, position ->
+            Pair(songId, position)
         }
     }
     
-    override suspend fun updateThemeMode(themeMode: AppConstants.ThemeMode) {
-        userPreferencesDataStore.edit { preferences ->
-            preferences[PreferencesKeys.THEME_MODE] = themeMode.name
-        }
+    override suspend fun saveLastQueue(songIds: List<Long>, position: Int) {
+        val serializedIds = songIds.joinToString(",")
+        userPreferences.setString(PreferencesKeys.LAST_QUEUE_SONGS, serializedIds)
+        userPreferences.setInt(PreferencesKeys.LAST_QUEUE_POSITION, position)
     }
     
-    override suspend fun setFirstLaunchCompleted() {
-        userPreferencesDataStore.edit { preferences ->
-            preferences[PreferencesKeys.IS_FIRST_LAUNCH] = false
-        }
-    }
-    
-    override suspend fun updateLastScanTime(timestamp: Long) {
-        userPreferencesDataStore.edit { preferences ->
-            preferences[PreferencesKeys.LAST_SCAN_TIME] = timestamp
-        }
-    }
-    
-    override suspend fun setAutoScanEnabled(enabled: Boolean) {
-        userPreferencesDataStore.edit { preferences ->
-            preferences[PreferencesKeys.AUTO_SCAN_ENABLED] = enabled
-        }
-    }
-    
-    override val settingsPreferences: Flow<SettingsPreferences> = settingsPreferencesDataStore.data
-        .catch { exception ->
-            if (exception is IOException) {
-                emit(emptyPreferences())
+    override suspend fun getLastQueue(): Flow<Pair<List<Long>, Int>> {
+        return kotlinx.coroutines.flow.combine(
+            userPreferences.getString(PreferencesKeys.LAST_QUEUE_SONGS, ""),
+            userPreferences.getInt(PreferencesKeys.LAST_QUEUE_POSITION, 0)
+        ) { serializedIds, position ->
+            val songIds = if (serializedIds.isNotBlank()) {
+                serializedIds.split(",").mapNotNull { it.toLongOrNull() }
             } else {
-                throw exception
+                emptyList()
             }
-        }
-        .map { preferences ->
-            SettingsPreferences(
-                audioQuality = preferences[PreferencesKeys.AUDIO_QUALITY] ?: "HIGH",
-                crossfadeEnabled = preferences[PreferencesKeys.CROSSFADE_ENABLED] ?: false,
-                crossfadeDuration = preferences[PreferencesKeys.CROSSFADE_DURATION] ?: 3000,
-                gaplessPlayback = preferences[PreferencesKeys.GAPLESS_PLAYBACK] ?: true,
-                repeatMode = preferences[PreferencesKeys.REPEAT_MODE] ?: 0,
-                shuffleMode = preferences[PreferencesKeys.SHUFFLE_MODE] ?: 0,
-                volumeLevel = preferences[PreferencesKeys.VOLUME_LEVEL] ?: 1.0f,
-                bassBoostEnabled = preferences[PreferencesKeys.BASS_BOOST_ENABLED] ?: false,
-                bassBoostStrength = preferences[PreferencesKeys.BASS_BOOST_STRENGTH] ?: 500,
-                virtualizerEnabled = preferences[PreferencesKeys.VIRTUALIZER_ENABLED] ?: false,
-                virtualizerStrength = preferences[PreferencesKeys.VIRTUALIZER_STRENGTH] ?: 500,
-                sleepTimerDuration = preferences[PreferencesKeys.SLEEP_TIMER_DURATION] ?: 0,
-                headphoneAutoPlay = preferences[PreferencesKeys.HEADPHONE_AUTO_PLAY] ?: true,
-                headphoneAutoPause = preferences[PreferencesKeys.HEADPHONE_AUTO_PAUSE] ?: true,
-                showNotification = preferences[PreferencesKeys.SHOW_NOTIFICATION] ?: true,
-                showLockScreenControls = preferences[PreferencesKeys.SHOW_LOCK_SCREEN_CONTROLS] ?: true,
-                libraryTabOrder = try {
-                    Json.decodeFromString<List<String>>(
-                        preferences[PreferencesKeys.LIBRARY_TAB_ORDER] ?: "[]"
-                    ).ifEmpty { listOf("SONGS", "ALBUMS", "ARTISTS") }
-                } catch (e: Exception) {
-                    listOf("SONGS", "ALBUMS", "ARTISTS")
-                },
-                gridSize = preferences[PreferencesKeys.GRID_SIZE] ?: 2,
-                sortOrder = preferences[PreferencesKeys.SORT_ORDER] ?: "TITLE_ASC"
-            )
-        }
-    
-    override suspend fun updateAudioQuality(quality: String) {
-        settingsPreferencesDataStore.edit { preferences ->
-            preferences[PreferencesKeys.AUDIO_QUALITY] = quality
+            Pair(songIds, position)
         }
     }
     
-    override suspend fun updateCrossfadeSettings(enabled: Boolean, duration: Int) {
-        settingsPreferencesDataStore.edit { preferences ->
-            preferences[PreferencesKeys.CROSSFADE_ENABLED] = enabled
-            preferences[PreferencesKeys.CROSSFADE_DURATION] = duration
-        }
+    // Statistics Preferences - Using available preference keys
+    override suspend fun incrementAppLaunchCount() {
+        // Would need a dedicated counter key - placeholder
     }
     
-    override suspend fun updateGaplessPlayback(enabled: Boolean) {
-        settingsPreferencesDataStore.edit { preferences ->
-            preferences[PreferencesKeys.GAPLESS_PLAYBACK] = enabled
-        }
+    override suspend fun getAppLaunchCount(): Flow<Int> {
+        return kotlinx.coroutines.flow.flowOf(0) // Placeholder
     }
     
-    override suspend fun updateRepeatMode(mode: Int) {
-        settingsPreferencesDataStore.edit { preferences ->
-            preferences[PreferencesKeys.REPEAT_MODE] = mode
-        }
+    override suspend fun updateTotalListeningTime(additionalTime: Long) {
+        userPreferences.setLong(PreferencesKeys.TOTAL_LISTENING_TIME, additionalTime)
     }
     
-    override suspend fun updateShuffleMode(mode: Int) {
-        settingsPreferencesDataStore.edit { preferences ->
-            preferences[PreferencesKeys.SHUFFLE_MODE] = mode
-        }
+    override suspend fun getTotalListeningTime(): Flow<Long> {
+        return userPreferences.getLong(PreferencesKeys.TOTAL_LISTENING_TIME, 0L)
     }
     
-    override suspend fun updateVolumeLevel(level: Float) {
-        settingsPreferencesDataStore.edit { preferences ->
-            preferences[PreferencesKeys.VOLUME_LEVEL] = level
-        }
+    override suspend fun updateSongsPlayedCount(count: Int) {
+        userPreferences.setLong(PreferencesKeys.SONGS_PLAYED_COUNT, count.toLong())
     }
     
-    override suspend fun updateBassBoostSettings(enabled: Boolean, strength: Int) {
-        settingsPreferencesDataStore.edit { preferences ->
-            preferences[PreferencesKeys.BASS_BOOST_ENABLED] = enabled
-            preferences[PreferencesKeys.BASS_BOOST_STRENGTH] = strength
-        }
+    override suspend fun getSongsPlayedCount(): Flow<Long> {
+        return userPreferences.getLong(PreferencesKeys.SONGS_PLAYED_COUNT, 0L)
     }
     
-    override suspend fun updateVirtualizerSettings(enabled: Boolean, strength: Int) {
-        settingsPreferencesDataStore.edit { preferences ->
-            preferences[PreferencesKeys.VIRTUALIZER_ENABLED] = enabled
-            preferences[PreferencesKeys.VIRTUALIZER_STRENGTH] = strength
-        }
+    override suspend fun updateFavoriteGenre(genre: String) {
+        userPreferences.setString(PreferencesKeys.FAVORITE_GENRE, genre)
     }
     
-    override suspend fun updateSleepTimerDuration(duration: Int) {
-        settingsPreferencesDataStore.edit { preferences ->
-            preferences[PreferencesKeys.SLEEP_TIMER_DURATION] = duration
-        }
+    override suspend fun getFavoriteGenre(): Flow<String> {
+        return userPreferences.getString(PreferencesKeys.FAVORITE_GENRE, "")
     }
     
-    override suspend fun updateHeadphoneSettings(autoPlay: Boolean, autoPause: Boolean) {
-        settingsPreferencesDataStore.edit { preferences ->
-            preferences[PreferencesKeys.HEADPHONE_AUTO_PLAY] = autoPlay
-            preferences[PreferencesKeys.HEADPHONE_AUTO_PAUSE] = autoPause
-        }
+    override suspend fun updateFavoriteArtist(artist: String) {
+        userPreferences.setString(PreferencesKeys.FAVORITE_ARTIST, artist)
     }
     
-    override suspend fun updateNotificationSettings(showNotification: Boolean, showLockScreen: Boolean) {
-        settingsPreferencesDataStore.edit { preferences ->
-            preferences[PreferencesKeys.SHOW_NOTIFICATION] = showNotification
-            preferences[PreferencesKeys.SHOW_LOCK_SCREEN_CONTROLS] = showLockScreen
-        }
+    override suspend fun getFavoriteArtist(): Flow<String> {
+        return userPreferences.getString(PreferencesKeys.FAVORITE_ARTIST, "")
     }
     
-    override suspend fun updateLibraryTabOrder(tabOrder: List<String>) {
-        settingsPreferencesDataStore.edit { preferences ->
-            preferences[PreferencesKeys.LIBRARY_TAB_ORDER] = Json.encodeToString(tabOrder)
-        }
+    override suspend fun updateLongestSession(duration: Long) {
+        userPreferences.setLong(PreferencesKeys.LONGEST_SESSION, duration)
     }
     
-    override suspend fun updateGridSize(size: Int) {
-        settingsPreferencesDataStore.edit { preferences ->
-            preferences[PreferencesKeys.GRID_SIZE] = size
-        }
+    override suspend fun getLongestSession(): Flow<Long> {
+        return userPreferences.getLong(PreferencesKeys.LONGEST_SESSION, 0L)
     }
     
-    override suspend fun updateSortOrder(sortOrder: String) {
-        settingsPreferencesDataStore.edit { preferences ->
-            preferences[PreferencesKeys.SORT_ORDER] = sortOrder
-        }
+    override suspend fun updateAverageSessionLength(length: Long) {
+        userPreferences.setLong(PreferencesKeys.AVERAGE_SESSION_LENGTH, length)
     }
     
-    override suspend fun savePlaybackState(
-        songId: Long,
-        position: Long,
-        playlistId: Long?,
-        queueSongIds: List<Long>,
-        queueIndex: Int
-    ) {
-        settingsPreferencesDataStore.edit { preferences ->
-            preferences[PreferencesKeys.CURRENT_SONG_ID] = songId
-            preferences[PreferencesKeys.CURRENT_POSITION] = position
-            playlistId?.let { preferences[PreferencesKeys.CURRENT_PLAYLIST_ID] = it }
-            preferences[PreferencesKeys.QUEUE_SONG_IDS] = Json.encodeToString(queueSongIds)
-            preferences[PreferencesKeys.QUEUE_INDEX] = queueIndex
-        }
+    override suspend fun getAverageSessionLength(): Flow<Long> {
+        return userPreferences.getLong(PreferencesKeys.AVERAGE_SESSION_LENGTH, 0L)
     }
     
-    override suspend fun getPlaybackState(): Flow<PlaybackState?> {
-        return settingsPreferencesDataStore.data.map { preferences ->
-            val songId = preferences[PreferencesKeys.CURRENT_SONG_ID]
-            if (songId != null) {
-                PlaybackState(
-                    songId = songId,
-                    position = preferences[PreferencesKeys.CURRENT_POSITION] ?: 0L,
-                    playlistId = preferences[PreferencesKeys.CURRENT_PLAYLIST_ID],
-                    queueSongIds = try {
-                        Json.decodeFromString<List<Long>>(
-                            preferences[PreferencesKeys.QUEUE_SONG_IDS] ?: "[]"
-                        )
-                    } catch (e: Exception) {
-                        emptyList()
-                    },
-                    queueIndex = preferences[PreferencesKeys.QUEUE_INDEX] ?: 0
-                )
-            } else {
-                null
-            }
-        }
+    override suspend fun updateMostActiveHour(hour: Int) {
+        userPreferences.setInt(PreferencesKeys.MOST_ACTIVE_HOUR, hour)
     }
     
-    data class PlaybackState(
-        val songId: Long,
-        val position: Long,
-        val playlistId: Long?,
-        val queueSongIds: List<Long>,
-        val queueIndex: Int
-    )
+    override suspend fun getMostActiveHour(): Flow<Int> {
+        return userPreferences.getInt(PreferencesKeys.MOST_ACTIVE_HOUR, 0)
+    }
+    
+    // Goals and Achievements - Using available preference keys
+    override suspend fun setWeeklyListeningGoal(goalMinutes: Long) {
+        userPreferences.setLong(PreferencesKeys.WEEKLY_LISTENING_GOAL, goalMinutes)
+    }
+    
+    override suspend fun getWeeklyListeningGoal(): Flow<Long> {
+        return userPreferences.getLong(PreferencesKeys.WEEKLY_LISTENING_GOAL, 0L)
+    }
+    
+    override suspend fun setMonthlyListeningGoal(goalMinutes: Long) {
+        userPreferences.setLong(PreferencesKeys.MONTHLY_LISTENING_GOAL, goalMinutes)
+    }
+    
+    override suspend fun getMonthlyListeningGoal(): Flow<Long> {
+        return userPreferences.getLong(PreferencesKeys.MONTHLY_LISTENING_GOAL, 0L)
+    }
+    
+    override suspend fun updateWeeklyProgress(progressMinutes: Long) {
+        // Would need dedicated progress keys - placeholder
+    }
+    
+    override suspend fun getWeeklyProgress(): Flow<Long> {
+        return kotlinx.coroutines.flow.flowOf(0L) // Placeholder
+    }
+    
+    override suspend fun updateMonthlyProgress(progressMinutes: Long) {
+        // Would need dedicated progress keys - placeholder
+    }
+    
+    override suspend fun getMonthlyProgress(): Flow<Long> {
+        return kotlinx.coroutines.flow.flowOf(0L) // Placeholder
+    }
+    
+    // Backup and Restore - Using UserPreferences clear method
+    override suspend fun createBackup(): String {
+        // Would need to serialize all preferences - placeholder
+        return ""
+    }
+    
+    override suspend fun restoreFromBackup(backupData: String): Boolean {
+        // Would need to deserialize and restore preferences - placeholder
+        return false
+    }
+    
+    override suspend fun clearAllPreferences() {
+        userPreferences.clearAll()
+    }
 }

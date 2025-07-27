@@ -2,6 +2,10 @@ package com.tinhtx.localplayerapplication.data.local.database.entities
 
 import com.tinhtx.localplayerapplication.domain.model.*
 
+/**
+ * Extension functions to convert between entities and domain models
+ */
+
 // SongEntity Mappers
 fun SongEntity.toDomain(): Song = Song(
     id = id,
@@ -68,7 +72,7 @@ fun Album.toEntity(): AlbumEntity = AlbumEntity(
     artworkPath = artworkPath
 )
 
-// ArtistEntity Mappers  
+// ArtistEntity Mappers
 fun ArtistEntity.toDomain(): Artist = Artist(
     id = id,
     name = name,
@@ -108,39 +112,44 @@ fun Playlist.toEntity(): PlaylistEntity = PlaylistEntity(
     artworkPath = artworkPath
 )
 
-// HistoryEntity Mappers
-fun HistoryEntity.toDomain(): PlayHistory = PlayHistory(
+// CastDeviceEntity Mappers
+fun CastDeviceEntity.toDomain(): CastDevice = CastDevice(
     id = id,
-    songId = songId,
-    playedAt = playedAt,
-    playDuration = playDuration,
-    completionPercentage = completionPercentage,
-    source = source,
-    sessionId = sessionId,
-    skipped = skipped
+    name = name,
+    type = type,
+    isAvailable = isAvailable,
+    isConnected = isConnected,
+    lastConnected = lastConnected,
+    capabilities = capabilities
 )
 
-fun PlayHistory.toEntity(): HistoryEntity = HistoryEntity(
+fun CastDevice.toEntity(): CastDeviceEntity = CastDeviceEntity(
     id = id,
-    songId = songId,
-    playedAt = playedAt,
-    playDuration = playDuration,
-    completionPercentage = completionPercentage,
-    source = source,
-    sessionId = sessionId,
-    skipped = skipped
+    name = name,
+    type = type,
+    isAvailable = isAvailable,
+    isConnected = isConnected,
+    lastConnected = lastConnected,
+    capabilities = capabilities,
+    updatedAt = System.currentTimeMillis()
 )
 
-fun DetailedHistoryEntity.toDomain(): DetailedPlayHistory = DetailedPlayHistory(
-    id = id,
-    songId = songId,
-    playedAt = playedAt,
-    playDuration = playDuration,
-    completionPercentage = completionPercentage,
-    source = source,
-    sessionId = sessionId,
-    skipped = skipped,
-    songTitle = title,
-    songArtist = artist,
-    songAlbum = album
-)
+
+// ❌ REMOVED: FavoriteEntity, HistoryEntity, PlaylistSongCrossRef mappers
+// These will be handled differently to match tree structure
+
+// Batch conversion functions
+fun List<SongEntity>.toDomainList(): List<Song> = map { it.toDomain() }
+fun List<Song>.toEntityList(): List<SongEntity> = map { it.toEntity() }
+
+fun List<AlbumEntity>.toDomainAlbums(): List<Album> = map { it.toDomain() }
+fun List<Album>.toEntityAlbums(): List<AlbumEntity> = map { it.toEntity() }
+
+fun List<ArtistEntity>.toDomainArtists(): List<Artist> = map { it.toDomain() }
+fun List<Artist>.toEntityArtists(): List<ArtistEntity> = map { it.toEntity() }
+
+fun List<PlaylistEntity>.toDomainPlaylists(): List<Playlist> = map { it.toDomain() }
+fun List<Playlist>.toEntityPlaylists(): List<PlaylistEntity> = map { it.toEntity() }
+
+fun List<CastDeviceEntity>.toDomainCastDevices(): List<CastDevice> = map { it.toDomain() }
+fun List<CastDevice>.toEntityCastDevices(): List<CastDeviceEntity> = map { it.toEntity() }

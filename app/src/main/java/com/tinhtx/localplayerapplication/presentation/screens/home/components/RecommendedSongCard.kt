@@ -1,12 +1,13 @@
 package com.tinhtx.localplayerapplication.presentation.screens.home.components
 
-import androidx.compose.animation.*
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -14,199 +15,189 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.tinhtx.localplayerapplication.domain.model.Song
-import com.tinhtx.localplayerapplication.presentation.components.image.AlbumArtImage
+import com.tinhtx.localplayerapplication.presentation.components.image.CoilAsyncImage
 
+/**
+ * Recommended Song Card for Home Screen - Optimized for home display
+ */
 @Composable
 fun RecommendedSongCard(
     song: Song,
     onClick: () -> Unit,
     onFavoriteClick: () -> Unit,
     modifier: Modifier = Modifier,
-    reason: String? = null
+    isFavorite: Boolean = false,
+    showRecommendationReason: Boolean = true,
+    recommendationReason: String = "Popular in your library"
 ) {
-    var isPressed by remember { mutableStateOf(false) }
-    
     Card(
-        onClick = onClick,
-        modifier = modifier,
+        modifier = modifier
+            .clickable { onClick() },
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.3f)
+            containerColor = MaterialTheme.colorScheme.surface
         ),
-        elevation = CardDefaults.cardElevation(
-            defaultElevation = if (isPressed) 8.dp else 4.dp
-        )
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
     ) {
-        Box {
-            // Recommendation badge
+        Column {
+            // Album Art Section với recommendation badge
             Box(
                 modifier = Modifier
-                    .align(Alignment.TopStart)
-                    .background(
-                        brush = Brush.linearGradient(
-                            colors = listOf(
-                                MaterialTheme.colorScheme.tertiary.copy(alpha = 0.8f),
-                                MaterialTheme.colorScheme.tertiary.copy(alpha = 0.6f)
-                            )
-                        ),
-                        shape = RoundedCornerShape(
-                            topStart = 12.dp,
-                            bottomEnd = 12.dp
-                        )
-                    )
-                    .padding(horizontal = 8.dp, vertical = 4.dp)
+                    .fillMaxWidth()
+                    .aspectRatio(1f)
             ) {
-                Text(
-                    text = "Recommended",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onTertiary
+                CoilAsyncImage(
+                    imageUrl = song.albumArtPath,
+                    contentDescription = "Album art for ${song.title}",
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
                 )
+                
+                // Gradient overlay
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(
+                            Brush.verticalGradient(
+                                colors = listOf(
+                                    Color.Transparent,
+                                    Color.Black.copy(alpha = 0.4f)
+                                )
+                            )
+                        )
+                )
+                
+                // Recommendation badge (top-left)
+                if (showRecommendationReason) {
+                    Card(
+                        modifier = Modifier
+                            .align(Alignment.TopStart)
+                            .padding(8.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.9f)
+                        ),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text(
+                            text = "Recommended",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onPrimary,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                        )
+                    }
+                }
+                
+                // Play button (center)
+                IconButton(
+                    onClick = onClick,
+                    modifier = Modifier
+                        .align(Alignment.Center)
+                        .size(48.dp)
+                        .background(
+                            Color.White.copy(alpha = 0.9f),
+                            RoundedCornerShape(24.dp)
+                        )
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.PlayArrow,
+                        contentDescription = "Play",
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
+                
+                // Favorite button (bottom-right)
+                IconButton(
+                    onClick = onFavoriteClick,
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(8.dp)
+                        .size(36.dp)
+                        .background(
+                            Color.Black.copy(alpha = 0.6f),
+                            RoundedCornerShape(18.dp)
+                        )
+                ) {
+                    Icon(
+                        imageVector = if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                        contentDescription = if (isFavorite) "Remove from favorites" else "Add to favorites",
+                        tint = if (isFavorite) Color.Red else Color.White,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
             }
             
+            // Song Info Section
             Column(
                 modifier = Modifier.padding(12.dp)
             ) {
-                Spacer(modifier = Modifier.height(20.dp)) // Space for badge
+                Text(
+                    text = song.title,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
                 
-                Row(
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    // Album art with play overlay
-                    Box(
-                        modifier = Modifier.size(48.dp)
-                    ) {
-                        AlbumArtImage(
-                            albumId = song.albumId,
-                            contentDescription = "Album art for ${song.title}",
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .clip(RoundedCornerShape(8.dp))
-                        )
-                        
-                        // Play button overlay
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .background(
-                                    Color.Black.copy(alpha = 0.0f),
-                                    RoundedCornerShape(8.dp)
-                                ),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            AnimatedVisibility(
-                                visible = isPressed,
-                                enter = scaleIn() + fadeIn(),
-                                exit = scaleOut() + fadeOut()
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(24.dp)
-                                        .background(
-                                            MaterialTheme.colorScheme.primary,
-                                            CircleShape
-                                        ),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.PlayArrow,
-                                        contentDescription = "Play",
-                                        modifier = Modifier.size(14.dp),
-                                        tint = MaterialTheme.colorScheme.onPrimary
-                                    )
-                                }
-                            }
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.width(12.dp))
-
-                    // Song info
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = song.title,
-                            style = MaterialTheme.typography.titleSmall,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        
-                        Text(
-                            text = song.displayArtist,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        
-                        if (reason != null) {
-                            Spacer(modifier = Modifier.height(2.dp))
-                            Text(
-                                text = reason,
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.tertiary,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
-                    }
-
-                    // Favorite button
-                    IconButton(
-                        onClick = onFavoriteClick,
-                        modifier = Modifier.size(32.dp)
-                    ) {
-                        AnimatedContent(
-                            targetState = song.isFavorite,
-                            transitionSpec = {
-                                scaleIn() + fadeIn() with scaleOut() + fadeOut()
-                            },
-                            label = "favorite_animation"
-                        ) { isFavorite ->
-                            Icon(
-                                imageVector = if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                                contentDescription = if (isFavorite) "Remove from favorites" else "Add to favorites",
-                                modifier = Modifier.size(16.dp),
-                                tint = if (isFavorite) Color.Red else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                            )
-                        }
-                    }
+                Spacer(modifier = Modifier.height(4.dp))
+                
+                Text(
+                    text = song.artist,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                
+                if (showRecommendationReason) {
+                    Spacer(modifier = Modifier.height(6.dp))
+                    
+                    Text(
+                        text = recommendationReason,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Medium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
                 }
                 
-                // Additional info row
-                if (song.playCount > 0 || song.year > 0) {
-                    Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(8.dp))
+                
+                // Bottom info row
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = formatDuration(song.duration),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                    )
                     
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        if (song.playCount > 0) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.PlayArrow,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(12.dp),
-                                    tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-                                )
-                                Spacer(modifier = Modifier.width(2.dp))
-                                Text(
-                                    text = "${song.playCount}",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-                                )
-                            }
+                    // Play count indicator (if > 0)
+                    if (song.playCount > 0) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "♫",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f)
+                            )
+                            Spacer(modifier = Modifier.width(2.dp))
+                            Text(
+                                text = "${song.playCount}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                            )
                         }
-                        
-                        Text(
-                            text = song.formattedDuration,
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-                        )
                     }
                 }
             }
@@ -214,99 +205,98 @@ fun RecommendedSongCard(
     }
 }
 
+/**
+ * Compact version cho horizontal lists
+ */
 @Composable
-fun RecommendedSongsList(
-    songs: List<Song>,
-    onSongClick: (Song) -> Unit,
-    onFavoriteClick: (Song) -> Unit,
+fun RecommendedSongCardCompact(
+    song: Song,
+    onClick: () -> Unit,
+    onFavoriteClick: () -> Unit,
     modifier: Modifier = Modifier,
-    reasons: Map<Long, String> = emptyMap()
-) {
-    LazyColumn(
-        modifier = modifier,
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-        contentPadding = PaddingValues(16.dp)
-    ) {
-        items(
-            items = songs,
-            key = { it.id }
-        ) { song ->
-            RecommendedSongCard(
-                song = song,
-                onClick = { onSongClick(song) },
-                onFavoriteClick = { onFavoriteClick(song) },
-                reason = reasons[song.id],
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .animateItemPlacement()
-            )
-        }
-    }
-}
-
-@Composable
-fun SmartRecommendationCard(
-    songs: List<Song>,
-    title: String,
-    subtitle: String,
-    onViewAllClick: () -> Unit,
-    onSongClick: (Song) -> Unit,
-    onFavoriteClick: (Song) -> Unit,
-    modifier: Modifier = Modifier
+    isFavorite: Boolean = false
 ) {
     Card(
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier
+            .clickable { onClick() },
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
-        )
+            containerColor = MaterialTheme.colorScheme.surfaceVariant
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
-        Column(
-            modifier = Modifier.padding(16.dp)
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(8.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            // Header
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+            // Compact album art
+            CoilAsyncImage(
+                imageUrl = song.albumArtPath,
+                contentDescription = "Album art for ${song.title}",
+                modifier = Modifier
+                    .size(48.dp)
+                    .clip(RoundedCornerShape(6.dp)),
+                contentScale = ContentScale.Crop
+            )
+            
+            Spacer(modifier = Modifier.width(10.dp))
+            
+            // Song info
+            Column(
+                modifier = Modifier.weight(1f)
             ) {
-                Column {
-                    Text(
-                        text = title,
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    Text(
-                        text = subtitle,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                Text(
+                    text = song.title,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                
+                Text(
+                    text = song.artist,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            
+            // Actions
+            Row {
+                IconButton(
+                    onClick = onFavoriteClick,
+                    modifier = Modifier.size(32.dp)
+                ) {
+                    Icon(
+                        imageVector = if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                        contentDescription = if (isFavorite) "Remove from favorites" else "Add to favorites",
+                        tint = if (isFavorite) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(16.dp)
                     )
                 }
                 
-                TextButton(onClick = onViewAllClick) {
-                    Text("View All")
+                IconButton(
+                    onClick = onClick,
+                    modifier = Modifier.size(32.dp)
+                ) {
                     Icon(
-                        imageVector = Icons.Default.ArrowForward,
-                        contentDescription = null,
+                        imageVector = Icons.Default.PlayArrow,
+                        contentDescription = "Play",
+                        tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(16.dp)
                     )
                 }
             }
-            
-            Spacer(modifier = Modifier.height(12.dp))
-            
-            // Songs list
-            Column(
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                songs.take(3).forEach { song ->
-                    RecommendedSongCard(
-                        song = song,
-                        onClick = { onSongClick(song) },
-                        onFavoriteClick = { onFavoriteClick(song) },
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
-            }
         }
     }
+}
+
+private fun formatDuration(durationMs: Long): String {
+    val totalSeconds = durationMs / 1000
+    val minutes = totalSeconds / 60
+    val seconds = totalSeconds % 60
+    return String.format("%d:%02d", minutes, seconds)
 }

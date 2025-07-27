@@ -1,6 +1,5 @@
 package com.tinhtx.localplayerapplication.presentation.screens.search.components
 
-import androidx.compose.animation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -8,334 +7,352 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
-import androidx.compose.material3.windowsizeclass.WindowSizeClass
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import com.tinhtx.localplayerapplication.presentation.theme.getHorizontalPadding
+import com.tinhtx.localplayerapplication.presentation.screens.search.*
 
 @Composable
 fun SearchInitialState(
+    searchHistory: List<SearchHistoryItem>,
     recentSearches: List<String>,
-    popularSearches: List<String>,
-    searchSuggestions: List<String>,
-    onRecentSearchClick: (String) -> Unit,
-    onPopularSearchClick: (String) -> Unit,
-    onSuggestionClick: (String) -> Unit,
-    onClearRecentSearches: () -> Unit,
-    windowSizeClass: WindowSizeClass,
+    trendingSearches: List<String>,
+    quickActions: List<QuickAction>,
+    onSearchFromHistory: (SearchHistoryItem) -> Unit,
+    onSearchFromRecent: (String) -> Unit,
+    onSearchFromTrending: (String) -> Unit,
+    onQuickAction: (QuickAction) -> Unit,
+    onClearHistory: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val horizontalPadding = windowSizeClass.getHorizontalPadding()
-
     LazyColumn(
-        modifier = modifier.fillMaxSize(),
-        contentPadding = PaddingValues(bottom = 100.dp),
+        modifier = modifier,
+        contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(24.dp)
     ) {
-        // Search welcome header
+        // Welcome message
         item {
-            SearchWelcomeHeader(
-                modifier = Modifier.padding(horizontal = horizontalPadding)
-            )
+            WelcomeSection()
+        }
+
+        // Quick actions
+        if (quickActions.isNotEmpty()) {
+            item {
+                QuickActionsSection(
+                    quickActions = quickActions,
+                    onQuickAction = onQuickAction
+                )
+            }
         }
 
         // Recent searches
         if (recentSearches.isNotEmpty()) {
             item {
-                SearchSectionHeader(
-                    title = "Recent searches",
-                    count = recentSearches.size,
-                    onSeeAllClick = null,
-                    actionText = "Clear",
-                    onActionClick = onClearRecentSearches,
-                    modifier = Modifier.padding(horizontal = horizontalPadding)
-                )
-            }
-
-            item {
-                LazyRow(
-                    contentPadding = PaddingValues(horizontal = horizontalPadding),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    items(
-                        items = recentSearches.take(10),
-                        key = { it }
-                    ) { search ->
-                        RecentSearchChip(
-                            text = search,
-                            onClick = { onRecentSearchClick(search) },
-                            modifier = Modifier.animateItemPlacement()
-                        )
-                    }
-                }
-            }
-        }
-
-        // Popular searches
-        if (popularSearches.isNotEmpty()) {
-            item {
-                SearchSectionHeader(
-                    title = "Popular searches",
-                    count = popularSearches.size,
-                    onSeeAllClick = null,
-                    modifier = Modifier.padding(horizontal = horizontalPadding)
-                )
-            }
-
-            item {
-                PopularSearchesGrid(
-                    searches = popularSearches,
-                    onSearchClick = onPopularSearchClick,
-                    modifier = Modifier.padding(horizontal = horizontalPadding)
+                RecentSearchesSection(
+                    recentSearches = recentSearches,
+                    onSearchFromRecent = onSearchFromRecent
                 )
             }
         }
 
-        // Search suggestions
-        if (searchSuggestions.isNotEmpty()) {
+        // Trending searches
+        if (trendingSearches.isNotEmpty()) {
             item {
-                SearchSectionHeader(
-                    title = "Suggested searches",
-                    count = searchSuggestions.size,
-                    onSeeAllClick = null,
-                    modifier = Modifier.padding(horizontal = horizontalPadding)
+                TrendingSearchesSection(
+                    trendingSearches = trendingSearches,
+                    onSearchFromTrending = onSearchFromTrending
                 )
             }
+        }
 
-            items(
-                items = searchSuggestions.take(5),
-                key = { it }
-            ) { suggestion ->
-                SearchSuggestionItem(
-                    suggestion = suggestion,
-                    onClick = { onSuggestionClick(suggestion) },
-                    modifier = Modifier
-                        .padding(horizontal = horizontalPadding)
-                        .animateItemPlacement()
+        // Search history
+        if (searchHistory.isNotEmpty()) {
+            item {
+                SearchHistorySection(
+                    searchHistory = searchHistory,
+                    onSearchFromHistory = onSearchFromHistory,
+                    onClearHistory = onClearHistory
                 )
             }
         }
 
         // Search tips
         item {
-            SearchTipsCard(
-                modifier = Modifier.padding(horizontal = horizontalPadding)
-            )
+            SearchTipsSection()
+        }
+
+        // Add bottom padding
+        item {
+            Spacer(modifier = Modifier.height(80.dp))
         }
     }
 }
 
 @Composable
-private fun SearchWelcomeHeader(
-    modifier: Modifier = Modifier
+private fun WelcomeSection() {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Icon(
+            imageVector = Icons.Default.Search,
+            contentDescription = null,
+            modifier = Modifier.size(64.dp),
+            tint = MaterialTheme.colorScheme.primary
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Text(
+            text = "Discover Your Music",
+            style = MaterialTheme.typography.headlineMedium,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurface,
+            textAlign = TextAlign.Center
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Text(
+            text = "Search for songs, artists, albums, and playlists",
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center
+        )
+    }
+}
+
+@Composable
+private fun QuickActionsSection(
+    quickActions: List<QuickAction>,
+    onQuickAction: (QuickAction) -> Unit
+) {
+    Column {
+        Text(
+            text = "Quick Actions",
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        LazyRow(
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            items(quickActions) { action ->
+                QuickActionCard(
+                    action = action,
+                    onClick = { onQuickAction(action) }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun QuickActionCard(
+    action: QuickAction,
+    onClick: () -> Unit
 ) {
     Card(
-        modifier = modifier.fillMaxWidth(),
+        onClick = onClick,
+        modifier = Modifier.size(width = 120.dp, height = 80.dp),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
-        ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+            containerColor = MaterialTheme.colorScheme.primaryContainer
+        )
     ) {
-        Row(
+        Column(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(20.dp),
-            verticalAlignment = Alignment.CenterVertically
+                .fillMaxSize()
+                .padding(12.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
         ) {
             Icon(
-                imageVector = Icons.Default.Search,
+                imageVector = getIconForAction(action.icon),
                 contentDescription = null,
-                modifier = Modifier.size(32.dp),
-                tint = MaterialTheme.colorScheme.primary
+                modifier = Modifier.size(24.dp),
+                tint = MaterialTheme.colorScheme.onPrimaryContainer
             )
-            
-            Spacer(modifier = Modifier.width(16.dp))
-            
-            Column {
-                Text(
-                    text = "Search your music",
-                    style = MaterialTheme.typography.titleLarge,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Text(
-                    text = "Find songs, artists, albums, and playlists",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
-                )
-            }
-        }
-    }
-}
 
-@Composable
-private fun RecentSearchChip(
-    text: String,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    FilterChip(
-        selected = false,
-        onClick = onClick,
-        label = {
+            Spacer(modifier = Modifier.height(4.dp))
+
             Text(
-                text = text,
-                style = MaterialTheme.typography.labelMedium,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
+                text = action.title,
+                style = MaterialTheme.typography.bodySmall,
+                fontWeight = FontWeight.Medium,
+                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                textAlign = TextAlign.Center,
+                maxLines = 2
             )
-        },
-        leadingIcon = {
-            Icon(
-                imageVector = Icons.Default.History,
-                contentDescription = null,
-                modifier = Modifier.size(16.dp)
-            )
-        },
-        modifier = modifier,
-        colors = FilterChipDefaults.filterChipColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant,
-            labelColor = MaterialTheme.colorScheme.onSurfaceVariant,
-            iconColor = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-    )
+        }
+    }
 }
 
 @Composable
-private fun PopularSearchesGrid(
-    searches: List<String>,
-    onSearchClick: (String) -> Unit,
-    modifier: Modifier = Modifier
+private fun RecentSearchesSection(
+    recentSearches: List<String>,
+    onSearchFromRecent: (String) -> Unit
 ) {
-    Column(
-        modifier = modifier,
-        verticalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        searches.chunked(2).forEach { rowSearches ->
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                rowSearches.forEach { search ->
-                    PopularSearchCard(
-                        text = search,
-                        onClick = { onSearchClick(search) },
-                        modifier = Modifier.weight(1f)
-                    )
-                }
-                
-                // Fill remaining space if odd number
-                if (rowSearches.size == 1) {
-                    Spacer(modifier = Modifier.weight(1f))
-                }
+    Column {
+        Text(
+            text = "Recent Searches",
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        LazyRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            items(recentSearches) { search ->
+                SuggestionChip(
+                    onClick = { onSearchFromRecent(search) },
+                    label = { Text(search) },
+                    leadingIcon = {
+                        Icon(
+                            imageVector = Icons.Default.History,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                )
             }
         }
     }
 }
 
 @Composable
-private fun PopularSearchCard(
-    text: String,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
+private fun TrendingSearchesSection(
+    trendingSearches: List<String>,
+    onSearchFromTrending: (String) -> Unit
 ) {
-    Card(
-        onClick = onClick,
-        modifier = modifier,
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.3f)
-        ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-    ) {
+    Column {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(
                 imageVector = Icons.Default.TrendingUp,
                 contentDescription = null,
                 modifier = Modifier.size(20.dp),
-                tint = MaterialTheme.colorScheme.tertiary
+                tint = MaterialTheme.colorScheme.primary
             )
-            
+
             Spacer(modifier = Modifier.width(8.dp))
-            
+
             Text(
-                text = text,
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f)
+                text = "Trending",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface
             )
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        LazyRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            items(trendingSearches) { search ->
+                SuggestionChip(
+                    onClick = { onSearchFromTrending(search) },
+                    label = { Text(search) },
+                    leadingIcon = {
+                        Icon(
+                            imageVector = Icons.Default.Whatshot,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                )
+            }
         }
     }
 }
 
 @Composable
-private fun SearchSuggestionItem(
-    suggestion: String,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
+private fun SearchHistorySection(
+    searchHistory: List<SearchHistoryItem>,
+    onSearchFromHistory: (SearchHistoryItem) -> Unit,
+    onClearHistory: () -> Unit
 ) {
-    Card(
-        onClick = onClick,
-        modifier = modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
-        ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
-    ) {
+    Column {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(
-                imageVector = Icons.Default.Search,
-                contentDescription = null,
-                modifier = Modifier.size(20.dp),
-                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-            )
-            
-            Spacer(modifier = Modifier.width(12.dp))
-            
             Text(
-                text = suggestion,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.weight(1f)
+                text = "Search History",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface
             )
-            
-            Icon(
-                imageVector = Icons.Default.NorthWest,
-                contentDescription = "Search",
-                modifier = Modifier.size(16.dp),
-                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
+
+            TextButton(onClick = onClearHistory) {
+                Text("Clear")
+            }
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        searchHistory.take(5).forEach { historyItem ->
+            SearchHistoryItem(
+                historyItem = historyItem,
+                onClick = { onSearchFromHistory(historyItem) }
             )
         }
     }
 }
 
 @Composable
-private fun SearchTipsCard(
-    modifier: Modifier = Modifier
+private fun SearchHistoryItem(
+    historyItem: SearchHistoryItem,
+    onClick: () -> Unit
 ) {
+    ListItem(
+        headlineContent = { Text(historyItem.query) },
+        supportingContent = {
+            Row {
+                Text("${historyItem.resultCount} results")
+                Text(" • ")
+                Text(formatHistoryTimestamp(historyItem.timestamp))
+            }
+        },
+        leadingContent = {
+            Icon(
+                imageVector = Icons.Default.History,
+                contentDescription = null,
+                modifier = Modifier.size(20.dp)
+            )
+        },
+        trailingContent = {
+            Icon(
+                imageVector = Icons.Default.NorthWest,
+                contentDescription = null,
+                modifier = Modifier.size(16.dp)
+            )
+        },
+        modifier = Modifier.clickable { onClick() }
+    )
+}
+
+@Composable
+private fun SearchTipsSection() {
     Card(
-        modifier = modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.3f)
-        ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+            containerColor = MaterialTheme.colorScheme.surfaceVariant
+        )
     ) {
         Column(
-            modifier = Modifier.padding(16.dp)
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp)
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically
@@ -344,44 +361,72 @@ private fun SearchTipsCard(
                     imageVector = Icons.Default.Lightbulb,
                     contentDescription = null,
                     modifier = Modifier.size(20.dp),
-                    tint = MaterialTheme.colorScheme.secondary
+                    tint = MaterialTheme.colorScheme.primary
                 )
-                
+
                 Spacer(modifier = Modifier.width(8.dp))
-                
+
                 Text(
-                    text = "Search tips",
+                    text = "Search Tips",
                     style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.onSurface
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-            
+
             Spacer(modifier = Modifier.height(8.dp))
-            
+
             val tips = listOf(
-                "Try different keywords or spellings",
-                "Search by artist, album, or song title",
-                "Use quotes for exact phrases"
+                "Use quotes for exact matches: \"song title\"",
+                "Search by artist: artist:\"Beatles\"",
+                "Filter by year: year:1970-1980",
+                "Find by genre: genre:rock",
+                "Use voice search for hands-free searching"
             )
-            
+
             tips.forEach { tip ->
                 Row(
-                    modifier = Modifier.padding(vertical = 2.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                    modifier = Modifier.padding(vertical = 2.dp)
                 ) {
                     Text(
-                        text = "•",
+                        text = "• ",
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.secondary
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                    Spacer(modifier = Modifier.width(8.dp))
                     Text(
                         text = tip,
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
         }
+    }
+}
+
+private fun getIconForAction(iconName: String): androidx.compose.ui.graphics.vector.ImageVector {
+    return when (iconName) {
+        "shuffle" -> Icons.Default.Shuffle
+        "new_releases" -> Icons.Default.NewReleases
+        "trending_up" -> Icons.Default.TrendingUp
+        "favorite" -> Icons.Default.Favorite
+        "mic" -> Icons.Default.Mic
+        "search" -> Icons.Default.Search
+        "playlist_add" -> Icons.Default.PlaylistAdd
+        "file_download" -> Icons.Default.FileDownload
+        else -> Icons.Default.MusicNote
+    }
+}
+
+private fun formatHistoryTimestamp(timestamp: Long): String {
+    val now = System.currentTimeMillis()
+    val diff = now - timestamp
+    
+    return when {
+        diff < 60_000 -> "Just now"
+        diff < 3600_000 -> "${diff / 60_000}m ago"
+        diff < 86400_000 -> "${diff / 3600_000}h ago"
+        diff < 604800_000 -> "${diff / 86400_000}d ago"
+        else -> "Long ago"
     }
 }

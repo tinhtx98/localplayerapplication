@@ -1,570 +1,814 @@
 package com.tinhtx.localplayerapplication.presentation.screens.search
 
-import androidx.compose.animation.*
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material3.*
-import androidx.compose.material3.windowsizeclass.WindowSizeClass
-import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
 import com.tinhtx.localplayerapplication.domain.model.*
-import com.tinhtx.localplayerapplication.presentation.components.common.*
-import com.tinhtx.localplayerapplication.presentation.screens.search.components.*
-import com.tinhtx.localplayerapplication.presentation.theme.getHorizontalPadding
+import com.tinhtx.localplayerapplication.domain.usecase.search.*
+import com.tinhtx.localplayerapplication.domain.usecase.music.*
+import com.tinhtx.localplayerapplication.domain.usecase.favorites.*
+import com.tinhtx.localplayerapplication.domain.usecase.player.*
+import com.tinhtx.localplayerapplication.domain.usecase.voice.*
+import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import javax.inject.Inject
 
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun SearchScreen(
-    onNavigateToPlayer: () -> Unit,
-    onNavigateToPlaylist: (Long) -> Unit,
-    onNavigateBack: () -> Unit,
-    windowSizeClass: WindowSizeClass,
-    modifier: Modifier = Modifier,
-    viewModel: SearchViewModel = hiltViewModel()
-) {
-    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    val context = LocalContext.current
-    val listState = rememberLazyListState()
-    val focusRequester = remember { FocusRequester() }
+/**
+ * ViewModel for Search Screen - Complete integration with search use cases
+ */
+@HiltViewModel
+class SearchViewModel @Inject constructor(
+    // Search Use Cases
+    private val searchMusicUseCase: SearchMusicUseCase,
+    private val getSearchSuggestionsUseCase: GetSearchSuggestionsUseCase,
+    private val getSearchHistoryUseCase: GetSearchHistoryUseCase,
+    private val saveSearchHistoryUseCase: SaveSearchHistoryUseCase,
+    private val clearSearchHistoryUseCase: ClearSearchHistoryUseCase,
+    
+    // Music Use Cases
+    private val getAllSongsUseCase: GetAllSongsUseCase,
+    private val getAllAlbumsUseCase: GetAllAlbumsUseCase,
+    private val getAllArtistsUseCase: GetAllArtistsUseCase,
+    private val getAllPlaylistsUseCase: GetAllPlaylistsUseCase,
+    
+    // Player Use Cases
+    private val playSongUseCase: PlaySongUseCase,
+    private val shufflePlayUseCase: ShufflePlayUseCase,
+    
+    // Favorites Use Cases
+    private val getFavoritesUseCase: GetFavoritesUseCase,
+    private val addToFavoritesUseCase: AddToFavoritesUseCase,
+    private val removeFromFavoritesUseCase: RemoveFromFavoritesUseCase,
+    
+    // Voice Search Use Cases
+    private val voiceSearchUseCase: VoiceSearchUseCase
+) : ViewModel() {
 
-    LaunchedEffect(Unit) {
-        focusRequester.requestFocus()
+    private val _uiState = MutableStateFlow(SearchUiState())
+    val uiState: StateFlow<SearchUiState> = _uiState.asStateFlow()
+
+    private var searchJob: Job? = null
+    private var suggestionsJob: Job? = null
+    private var voiceSearchJob: Job? = null
+
+    init {
+        loadInitialData()
+        observeFavorites()
     }
 
-    Scaffold(
-        modifier = modifier,
-        topBar = {
-            SearchTopAppBar(
-                searchQuery = uiState.searchQuery,
-                onSearchQueryChange = { query -> 
-                    viewModel.updateSearchQuery(query)
-                },
-                onNavigateBack = onNavigateBack,
-                onClearSearch = {
-                    viewModel.clearSearch()
-                },
-                focusRequester = focusRequester,
-                isSearching = uiState.isSearching
-            )
+    // =================================================================================
+    // INITIALIZATION
+    // =================================================================================
+
+    /**
+     * Load initial search data
+     */
+    private fun loadInitialData() {
+        viewModelScope.launch {
+            try {
+                // Load search history and trending searches concurrently
+                val historyDeferred = async { loadSearchHistory() }
+                val trendingDeferred = async { loadTrendingSearches() }
+                val voiceDeferred = async { checkVoiceSearchAvailability() }
+                
+                awaitAll(historyDeferred, trendingDeferred, voiceDeferred)
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copyWithError("Failed to load search data: ${e.message}")
+            }
         }
-    ) { paddingValues ->
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-        ) {
-            when {
-                uiState.searchQuery.isBlank() -> {
-                    SearchInitialState(
-                        recentSearches = uiState.recentSearches,
-                        popularSearches = uiState.popularSearches,
-                        searchSuggestions = uiState.searchSuggestions,
-                        onRecentSearchClick = { query ->
-                            viewModel.updateSearchQuery(query)
-                        },
-                        onPopularSearchClick = { query ->
-                            viewModel.updateSearchQuery(query)
-                        },
-                        onSuggestionClick = { suggestion ->
-                            viewModel.updateSearchQuery(suggestion)
-                        },
-                        onClearRecentSearches = {
-                            viewModel.clearRecentSearches()
-                        },
-                        windowSizeClass = windowSizeClass
+    }
+
+    private suspend fun loadSearchHistory() {
+        try {
+            getSearchHistoryUseCase.execute().fold(
+                onSuccess = { history ->
+                    val recentSearches = history.take(10).map { it.query }
+                    _uiState.value = _uiState.value.copy(
+                        searchHistory = history,
+                        recentSearches = recentSearches
                     )
+                },
+                onFailure = { error ->
+                    // History loading failure is not critical
                 }
-                uiState.isSearching -> {
-                    SearchLoadingState(
-                        query = uiState.searchQuery,
-                        modifier = Modifier.fillMaxSize()
-                    )
-                }
-                uiState.error != null -> {
-                    MusicErrorMessage(
-                        title = "Search Error",
-                        message = uiState.error,
-                        onRetry = { 
-                            viewModel.retrySearch()
-                        },
-                        errorType = MusicErrorType.NETWORK,
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(16.dp)
-                    )
-                }
-                uiState.searchResults.isEmpty() -> {
-                    SearchNoResultsState(
-                        query = uiState.searchQuery,
-                        onTryAgain = {
-                            viewModel.retrySearch()
-                        },
-                        modifier = Modifier.fillMaxSize()
-                    )
-                }
-                else -> {
-                    SearchResultsContent(
-                        uiState = uiState,
-                        windowSizeClass = windowSizeClass,
-                        listState = listState,
-                        onSongClick = { song ->
-                            viewModel.playSong(song)
-                            onNavigateToPlayer()
-                        },
-                        onAlbumClick = { album ->
-                            viewModel.playAlbum(album)
-                            onNavigateToPlayer()
-                        },
-                        onArtistClick = { artist ->
-                            viewModel.playArtist(artist)
-                            onNavigateToPlayer()
-                        },
-                        onPlaylistClick = onNavigateToPlaylist,
-                        onFavoriteClick = { song ->
-                            viewModel.toggleFavorite(song)
-                        },
-                        onAddToPlaylistClick = { song ->
-                            viewModel.showAddToPlaylistDialog(song)
+            )
+        } catch (e: Exception) {
+            // History loading failure is not critical
+        }
+    }
+
+    private suspend fun loadTrendingSearches() {
+        try {
+            // TODO: Implement trending searches from analytics
+            val trending = listOf("rock", "pop", "jazz", "classical", "electronic")
+            _uiState.value = _uiState.value.copy(trendingSearches = trending)
+        } catch (e: Exception) {
+            // Trending searches failure is not critical
+        }
+    }
+
+    private suspend fun checkVoiceSearchAvailability() {
+        try {
+            val isAvailable = voiceSearchUseCase.isAvailable()
+            _uiState.value = _uiState.value.copy(isVoiceSearchAvailable = isAvailable)
+        } catch (e: Exception) {
+            _uiState.value = _uiState.value.copy(isVoiceSearchAvailable = false)
+        }
+    }
+
+    // =================================================================================
+    // SEARCH FUNCTIONALITY
+    // =================================================================================
+
+    /**
+     * Perform search with query
+     */
+    fun search(query: String, saveToHistory: Boolean = true) {
+        if (query.isBlank()) {
+            clearSearch()
+            return
+        }
+
+        // Cancel previous search
+        searchJob?.cancel()
+        
+        searchJob = viewModelScope.launch {
+            try {
+                val startTime = System.currentTimeMillis()
+                
+                _uiState.value = _uiState.value.copy(
+                    searchQuery = query.trim(),
+                    isSearching = true,
+                    isLoading = true,
+                    searchStartTime = startTime,
+                    error = null
+                )
+
+                // Perform search
+                searchMusicUseCase.execute(
+                    query = query.trim(),
+                    category = _uiState.value.selectedCategory,
+                    filters = _uiState.value.filters,
+                    sortOrder = _uiState.value.sortOrder,
+                    sortAscending = _uiState.value.sortAscending
+                ).fold(
+                    onSuccess = { results ->
+                        val searchTime = System.currentTimeMillis() - startTime
+                        val searchResults = results.copy(searchTime = searchTime)
+                        
+                        _uiState.value = _uiState.value.copy(
+                            searchResults = searchResults,
+                            isSearching = false,
+                            isLoading = false,
+                            hasSearched = true,
+                            searchDuration = searchTime,
+                            error = null
+                        )
+                        
+                        // Save to search history
+                        if (saveToHistory && results.hasResults) {
+                            saveSearchToHistory(query.trim(), results.totalCount)
                         }
-                    )
+                        
+                        // Update analytics
+                        updateSearchAnalytics(query, results, searchTime)
+                    },
+                    onFailure = { error ->
+                        _uiState.value = _uiState.value.copy(
+                            isSearching = false,
+                            isLoading = false,
+                            hasSearched = true,
+                            error = "Search failed: ${error.message}"
+                        )
+                    }
+                )
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(
+                    isSearching = false,
+                    isLoading = false,
+                    hasSearched = true,
+                    error = "Search error: ${e.message}"
+                )
+            }
+        }
+    }
+
+    /**
+     * Update search query (for real-time typing)
+     */
+    fun updateSearchQuery(query: String) {
+        _uiState.value = _uiState.value.copyWithQuery(query, query.isNotBlank())
+        
+        // Load suggestions for non-empty queries
+        if (query.isNotBlank()) {
+            loadSearchSuggestions(query)
+        } else {
+            _uiState.value = _uiState.value.copy(searchSuggestions = emptyList())
+        }
+    }
+
+    /**
+     * Trigger search with current query
+     */
+    fun performSearch() {
+        val query = _uiState.value.searchQuery
+        if (query.isNotBlank()) {
+            search(query)
+        }
+    }
+
+    /**
+     * Clear search
+     */
+    fun clearSearch() {
+        searchJob?.cancel()
+        suggestionsJob?.cancel()
+        
+        _uiState.value = _uiState.value.copy(
+            searchQuery = "",
+            isSearching = false,
+            isSearchActive = false,
+            isLoading = false,
+            hasSearched = false,
+            searchResults = SearchResults(),
+            searchSuggestions = emptyList(),
+            error = null
+        )
+    }
+
+    /**
+     * Search from history item
+     */
+    fun searchFromHistory(historyItem: SearchHistoryItem) {
+        updateSearchCategory(historyItem.category)
+        search(historyItem.query)
+    }
+
+    /**
+     * Search from suggestion
+     */
+    fun searchFromSuggestion(suggestion: SearchSuggestion) {
+        when (suggestion.type) {
+            SuggestionType.QUERY -> search(suggestion.text)
+            SuggestionType.SONG -> {
+                updateSearchCategory(SearchCategory.SONGS)
+                search(suggestion.text)
+            }
+            SuggestionType.ARTIST -> {
+                updateSearchCategory(SearchCategory.ARTISTS)
+                search(suggestion.text)
+            }
+            SuggestionType.ALBUM -> {
+                updateSearchCategory(SearchCategory.ALBUMS)
+                search(suggestion.text)
+            }
+            SuggestionType.PLAYLIST -> {
+                updateSearchCategory(SearchCategory.PLAYLISTS)
+                search(suggestion.text)
+            }
+            SuggestionType.GENRE -> {
+                // Update filters with selected genre
+                val currentFilters = _uiState.value.filters
+                val updatedFilters = currentFilters.copy(
+                    genres = setOf(suggestion.text)
+                )
+                updateSearchFilters(updatedFilters)
+                search(_uiState.value.searchQuery)
+            }
+        }
+    }
+
+    // =================================================================================
+    // SEARCH SUGGESTIONS
+    // =================================================================================
+
+    /**
+     * Load search suggestions
+     */
+    private fun loadSearchSuggestions(query: String) {
+        suggestionsJob?.cancel()
+        
+        suggestionsJob = viewModelScope.launch {
+            try {
+                _uiState.value = _uiState.value.copy(suggestionsLoading = true)
+                
+                // Add small delay to avoid too many requests
+                delay(300)
+                
+                getSearchSuggestionsUseCase.execute(query).fold(
+                    onSuccess = { suggestions ->
+                        _uiState.value = _uiState.value.copy(
+                            searchSuggestions = suggestions,
+                            suggestionsLoading = false
+                        )
+                    },
+                    onFailure = {
+                        _uiState.value = _uiState.value.copy(
+                            searchSuggestions = emptyList(),
+                            suggestionsLoading = false
+                        )
+                    }
+                )
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(
+                    searchSuggestions = emptyList(),
+                    suggestionsLoading = false
+                )
+            }
+        }
+    }
+
+    // =================================================================================
+    // VOICE SEARCH
+    // =================================================================================
+
+    /**
+     * Start voice search
+     */
+    fun startVoiceSearch() {
+        if (!_uiState.value.isVoiceSearchAvailable) return
+        
+        voiceSearchJob?.cancel()
+        voiceSearchJob = viewModelScope.launch {
+            try {
+                _uiState.value = _uiState.value.copy(
+                    isVoiceSearchActive = true,
+                    showVoiceSearchDialog = true,
+                    voiceSearchError = null
+                )
+                
+                voiceSearchUseCase.startListening().fold(
+                    onSuccess = { results ->
+                        results.collect { result ->
+                            when (result) {
+                                is VoiceSearchResult.Listening -> {
+                                    // Update UI to show listening state
+                                }
+                                is VoiceSearchResult.Speaking -> {
+                                    _uiState.value = _uiState.value.copy(
+                                        voiceSearchResults = result.partialText
+                                    )
+                                }
+                                is VoiceSearchResult.Success -> {
+                                    _uiState.value = _uiState.value.copy(
+                                        isVoiceSearchActive = false,
+                                        showVoiceSearchDialog = false,
+                                        voiceSearchResults = result.text
+                                    )
+                                    
+                                    // Perform search with voice result
+                                    search(result.text)
+                                }
+                                is VoiceSearchResult.Error -> {
+                                    _uiState.value = _uiState.value.copy(
+                                        isVoiceSearchActive = false,
+                                        showVoiceSearchDialog = false,
+                                        voiceSearchError = result.message
+                                    )
+                                }
+                            }
+                        }
+                    },
+                    onFailure = { error ->
+                        _uiState.value = _uiState.value.copy(
+                            isVoiceSearchActive = false,
+                            showVoiceSearchDialog = false,
+                            voiceSearchError = error.message
+                        )
+                    }
+                )
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(
+                    isVoiceSearchActive = false,
+                    showVoiceSearchDialog = false,
+                    voiceSearchError = e.message
+                )
+            }
+        }
+    }
+
+    /**
+     * Stop voice search
+     */
+    fun stopVoiceSearch() {
+        voiceSearchJob?.cancel()
+        _uiState.value = _uiState.value.copy(
+            isVoiceSearchActive = false,
+            showVoiceSearchDialog = false,
+            voiceSearchResults = "",
+            voiceSearchError = null
+        )
+    }
+
+    // =================================================================================
+    // SEARCH CATEGORIES & FILTERS
+    // =================================================================================
+
+    /**
+     * Update search category
+     */
+    fun updateSearchCategory(category: SearchCategory) {
+        _uiState.value = _uiState.value.copy(selectedCategory = category)
+        
+        // Re-search if we have results
+        if (_uiState.value.hasSearched && _uiState.value.searchQuery.isNotBlank()) {
+            search(_uiState.value.searchQuery, saveToHistory = false)
+        }
+    }
+
+    /**
+     * Update search filters
+     */
+    fun updateSearchFilters(filters: SearchFilters) {
+        _uiState.value = _uiState.value.copy(filters = filters)
+        
+        // Re-search if we have results
+        if (_uiState.value.hasSearched && _uiState.value.searchQuery.isNotBlank()) {
+            search(_uiState.value.searchQuery, saveToHistory = false)
+        }
+    }
+
+    /**
+     * Update sort order
+     */
+    fun updateSortOrder(sortOrder: SearchSortOrder, ascending: Boolean = false) {
+        _uiState.value = _uiState.value.copy(
+            sortOrder = sortOrder,
+            sortAscending = ascending
+        )
+        
+        // Re-search if we have results
+        if (_uiState.value.hasSearched && _uiState.value.searchQuery.isNotBlank()) {
+            search(_uiState.value.searchQuery, saveToHistory = false)
+        }
+    }
+
+    /**
+     * Toggle search filters visibility
+     */
+    fun toggleSearchFilters() {
+        _uiState.value = _uiState.value.copy(
+            showSearchFilters = !_uiState.value.showSearchFilters
+        )
+    }
+
+    // =================================================================================
+    // QUICK ACTIONS
+    // =================================================================================
+
+    /**
+     * Execute quick action
+     */
+    fun executeQuickAction(action: QuickAction) {
+        when (action.action) {
+            QuickActionType.SHUFFLE_ALL -> shuffleAllSongs()
+            QuickActionType.RECENTLY_ADDED -> searchRecentlyAdded()
+            QuickActionType.MOST_PLAYED -> searchMostPlayed()
+            QuickActionType.FAVORITES -> searchFavorites()
+            QuickActionType.VOICE_SEARCH -> startVoiceSearch()
+            QuickActionType.SCAN_LIBRARY -> triggerLibraryScan()
+            QuickActionType.CREATE_PLAYLIST -> showCreatePlaylistDialog()
+            QuickActionType.IMPORT_MUSIC -> importMusic()
+        }
+    }
+
+    private fun shuffleAllSongs() {
+        viewModelScope.launch {
+            try {
+                getAllSongsUseCase.getAllSongs().first().let { songs ->
+                    if (songs.isNotEmpty()) {
+                        shufflePlayUseCase.execute(songs)
+                    }
+                }
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copyWithError("Failed to shuffle songs: ${e.message}")
+            }
+        }
+    }
+
+    private fun searchRecentlyAdded() {
+        updateSearchCategory(SearchCategory.SONGS)
+        updateSortOrder(SearchSortOrder.DATE_ADDED, ascending = false)
+        search("", saveToHistory = false)
+    }
+
+    private fun searchMostPlayed() {
+        updateSearchCategory(SearchCategory.SONGS)
+        updateSortOrder(SearchSortOrder.PLAY_COUNT, ascending = false)
+        search("", saveToHistory = false)
+    }
+
+    private fun searchFavorites() {
+        val filters = _uiState.value.filters.copy(onlyFavorites = true)
+        updateSearchFilters(filters)
+        search("favorites", saveToHistory = false)
+    }
+
+    private fun triggerLibraryScan() {
+        // TODO: Implement library scan trigger
+    }
+
+    private fun showCreatePlaylistDialog() {
+        _uiState.value = _uiState.value.copy(showCreatePlaylistDialog = true)
+    }
+
+    private fun importMusic() {
+        // TODO: Implement music import
+    }
+
+    // =================================================================================
+    // PLAYBACK CONTROLS
+    // =================================================================================
+
+    /**
+     * Play song
+     */
+    fun playSong(song: Song) {
+        viewModelScope.launch {
+            try {
+                playSongUseCase.execute(song).fold(
+                    onSuccess = {
+                        _uiState.value = _uiState.value.copy(
+                            currentPlayingSong = song,
+                            isPlaying = true,
+                            selectedSongForPlayback = song
+                        )
+                    },
+                    onFailure = { error ->
+                        _uiState.value = _uiState.value.copyWithError("Failed to play song: ${error.message}")
+                    }
+                )
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copyWithError("Playback error: ${e.message}")
+            }
+        }
+    }
+
+    /**
+     * Play search results
+     */
+    fun playSearchResults() {
+        val songs = _uiState.value.filteredResults.songs
+        if (songs.isNotEmpty()) {
+            playSong(songs.first())
+        }
+    }
+
+    /**
+     * Shuffle play search results
+     */
+    fun shufflePlaySearchResults() {
+        val songs = _uiState.value.filteredResults.songs
+        if (songs.isNotEmpty()) {
+            viewModelScope.launch {
+                try {
+                    shufflePlayUseCase.execute(songs)
+                } catch (e: Exception) {
+                    _uiState.value = _uiState.value.copyWithError("Failed to shuffle: ${e.message}")
                 }
             }
         }
     }
-}
 
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun SearchTopAppBar(
-    searchQuery: String,
-    onSearchQueryChange: (String) -> Unit,
-    onNavigateBack: () -> Unit,
-    onClearSearch: () -> Unit,
-    focusRequester: FocusRequester,
-    isSearching: Boolean
-) {
-    TopAppBar(
-        title = {
-            SearchTextField(
-                query = searchQuery,
-                onQueryChange = onSearchQueryChange,
-                onClearClick = onClearSearch,
-                focusRequester = focusRequester,
-                isSearching = isSearching,
-                modifier = Modifier.fillMaxWidth()
-            )
-        },
-        navigationIcon = {
-            IconButton(onClick = onNavigateBack) {
-                AnimatedContent(
-                    targetState = searchQuery.isNotEmpty(),
-                    transitionSpec = {
-                        fadeIn() with fadeOut()
-                    },
-                    label = "back_icon"
-                ) { hasQuery ->
-                    Icon(
-                        imageVector = if (hasQuery) Icons.Default.Close else Icons.Default.ArrowBack,
-                        contentDescription = if (hasQuery) "Clear search" else "Back"
-                    )
-                }
-            }
-        },
-        colors = TopAppBarDefaults.topAppBarColors(
-            containerColor = MaterialTheme.colorScheme.surface
-        )
-    )
-}
+    // =================================================================================
+    // FAVORITES MANAGEMENT
+    // =================================================================================
 
-@Composable
-private fun SearchTextField(
-    query: String,
-    onQueryChange: (String) -> Unit,
-    onClearClick: () -> Unit,
-    focusRequester: FocusRequester,
-    isSearching: Boolean,
-    modifier: Modifier = Modifier
-) {
-    OutlinedTextField(
-        value = query,
-        onValueChange = onQueryChange,
-        modifier = modifier.focusRequester(focusRequester),
-        placeholder = {
-            Text(
-                text = "Search songs, artists, albums...",
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-            )
-        },
-        leadingIcon = {
-            AnimatedContent(
-                targetState = isSearching,
-                transitionSpec = {
-                    fadeIn() with fadeOut()
-                },
-                label = "search_icon"
-            ) { searching ->
-                if (searching) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(20.dp),
-                        strokeWidth = 2.dp,
-                        color = MaterialTheme.colorScheme.primary
-                    )
+    /**
+     * Toggle song favorite status
+     */
+    fun toggleSongFavorite(song: Song) {
+        viewModelScope.launch {
+            try {
+                val isFavorite = _uiState.value.isSongFavorite(song)
+                
+                if (isFavorite) {
+                    removeFromFavoritesUseCase.execute(song.id)
                 } else {
-                    Icon(
-                        imageVector = Icons.Default.Search,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary
-                    )
+                    addToFavoritesUseCase.execute(song.id)
                 }
+                
+                // Favorites will be updated via observeFavorites()
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copyWithError("Failed to update favorites: ${e.message}")
             }
-        },
-        trailingIcon = {
-            AnimatedVisibility(
-                visible = query.isNotEmpty(),
-                enter = fadeIn() + scaleIn(),
-                exit = fadeOut() + scaleOut()
-            ) {
-                IconButton(onClick = onClearClick) {
-                    Icon(
-                        imageVector = Icons.Default.Clear,
-                        contentDescription = "Clear search",
-                        tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                    )
+        }
+    }
+
+    private fun observeFavorites() {
+        viewModelScope.launch {
+            getFavoritesUseCase.getFavoriteSongs()
+                .catch { e ->
+                    _uiState.value = _uiState.value.copyWithError("Failed to load favorites: ${e.message}")
                 }
-            }
-        },
-        singleLine = true,
-        colors = OutlinedTextFieldDefaults.colors(
-            focusedBorderColor = MaterialTheme.colorScheme.primary,
-            unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f),
-            focusedContainerColor = MaterialTheme.colorScheme.surface,
-            unfocusedContainerColor = MaterialTheme.colorScheme.surface
-        ),
-        shape = androidx.compose.foundation.shape.RoundedCornerShape(28.dp)
-    )
-}
-
-@Composable
-private fun SearchResultsContent(
-    uiState: SearchUiState,
-    windowSizeClass: WindowSizeClass,
-    listState: LazyListState,
-    onSongClick: (Song) -> Unit,
-    onAlbumClick: (Album) -> Unit,
-    onArtistClick: (Artist) -> Unit,
-    onPlaylistClick: (Long) -> Unit,
-    onFavoriteClick: (Song) -> Unit,
-    onAddToPlaylistClick: (Song) -> Unit
-) {
-    val horizontalPadding = windowSizeClass.getHorizontalPadding()
-
-    LazyColumn(
-        state = listState,
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(bottom = 100.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        // Search results header
-        item {
-            SearchResultsHeader(
-                query = uiState.searchQuery,
-                totalResults = uiState.totalResults,
-                searchTime = uiState.searchTime,
-                modifier = Modifier.padding(horizontal = horizontalPadding)
-            )
-        }
-
-        // Quick actions (if available)
-        if (uiState.quickActions.isNotEmpty()) {
-            item {
-                SearchQuickActions(
-                    actions = uiState.quickActions,
-                    onActionClick = { action ->
-                        when (action.type) {
-                            SearchActionType.PLAY_ALL -> {
-                                if (uiState.searchResults.songs.isNotEmpty()) {
-                                    onSongClick(uiState.searchResults.songs.first())
-                                }
-                            }
-                            SearchActionType.SHUFFLE_ALL -> {
-                                if (uiState.searchResults.songs.isNotEmpty()) {
-                                    onSongClick(uiState.searchResults.songs.random())
-                                }
-                            }
-                            else -> {}
-                        }
-                    },
-                    modifier = Modifier.padding(horizontal = horizontalPadding)
-                )
-            }
-        }
-
-        // Top result (if available)
-        uiState.topResult?.let { topResult ->
-            item {
-                SearchTopResult(
-                    result = topResult,
-                    onClick = {
-                        when (topResult) {
-                            is Song -> onSongClick(topResult)
-                            is Album -> onAlbumClick(topResult)
-                            is Artist -> onArtistClick(topResult)
-                            is Playlist -> onPlaylistClick(topResult.id)
-                        }
-                    },
-                    onFavoriteClick = if (topResult is Song) {
-                        { onFavoriteClick(topResult) }
-                    } else null,
-                    modifier = Modifier.padding(horizontal = horizontalPadding)
-                )
-            }
-        }
-
-        // Songs section
-        if (uiState.searchResults.songs.isNotEmpty()) {
-            item {
-                SearchSectionHeader(
-                    title = "Songs",
-                    count = uiState.searchResults.songs.size,
-                    onSeeAllClick = null,
-                    modifier = Modifier.padding(horizontal = horizontalPadding)
-                )
-            }
-
-            items(
-                items = uiState.searchResults.songs.take(5),
-                key = { it.id }
-            ) { song ->
-                SearchSongItem(
-                    song = song,
-                    query = uiState.searchQuery,
-                    onClick = { onSongClick(song) },
-                    onFavoriteClick = { onFavoriteClick(song) },
-                    onMoreClick = { onAddToPlaylistClick(song) },
-                    modifier = Modifier
-                        .padding(horizontal = horizontalPadding)
-                        .animateItemPlacement()
-                )
-            }
-
-            if (uiState.searchResults.songs.size > 5) {
-                item {
-                    ShowMoreButton(
-                        text = "Show ${uiState.searchResults.songs.size - 5} more songs",
-                        onClick = {
-                            // Expand songs list or navigate to full songs results
-                        },
-                        modifier = Modifier.padding(horizontal = horizontalPadding)
-                    )
+                .collect { favorites ->
+                    val favoriteIds = favorites.map { it.id }.toSet()
+                    _uiState.value = _uiState.value.copy(favoriteSongs = favoriteIds)
                 }
+        }
+    }
+
+    // =================================================================================
+    // SEARCH HISTORY MANAGEMENT
+    // =================================================================================
+
+    private fun saveSearchToHistory(query: String, resultCount: Int) {
+        viewModelScope.launch {
+            try {
+                val historyItem = SearchHistoryItem(
+                    query = query,
+                    timestamp = System.currentTimeMillis(),
+                    resultCount = resultCount,
+                    category = _uiState.value.selectedCategory
+                )
+                
+                saveSearchHistoryUseCase.execute(historyItem)
+                
+                // Update current history
+                loadSearchHistory()
+            } catch (e: Exception) {
+                // History saving failure is not critical
             }
         }
+    }
 
-        // Artists section
-        if (uiState.searchResults.artists.isNotEmpty()) {
-            item {
-                SearchSectionHeader(
-                    title = "Artists",
-                    count = uiState.searchResults.artists.size,
-                    onSeeAllClick = null,
-                    modifier = Modifier.padding(horizontal = horizontalPadding)
+    /**
+     * Clear search history
+     */
+    fun clearSearchHistory() {
+        viewModelScope.launch {
+            try {
+                clearSearchHistoryUseCase.execute()
+                _uiState.value = _uiState.value.copy(
+                    searchHistory = emptyList(),
+                    recentSearches = emptyList()
                 )
-            }
-
-            items(
-                items = uiState.searchResults.artists.take(3),
-                key = { it.id }
-            ) { artist ->
-                SearchArtistItem(
-                    artist = artist,
-                    query = uiState.searchQuery,
-                    onClick = { onArtistClick(artist) },
-                    modifier = Modifier
-                        .padding(horizontal = horizontalPadding)
-                        .animateItemPlacement()
-                )
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copyWithError("Failed to clear history: ${e.message}")
             }
         }
+    }
 
-        // Albums section
-        if (uiState.searchResults.albums.isNotEmpty()) {
-            item {
-                SearchSectionHeader(
-                    title = "Albums",
-                    count = uiState.searchResults.albums.size,
-                    onSeeAllClick = null,
-                    modifier = Modifier.padding(horizontal = horizontalPadding)
-                )
-            }
+    // =================================================================================
+    // SELECTION MODE
+    // =================================================================================
 
-            items(
-                items = uiState.searchResults.albums.take(3),
-                key = { it.id }
-            ) { album ->
-                SearchAlbumItem(
-                    album = album,
-                    query = uiState.searchQuery,
-                    onClick = { onAlbumClick(album) },
-                    modifier = Modifier
-                        .padding(horizontal = horizontalPadding)
-                        .animateItemPlacement()
+    /**
+     * Toggle selection mode
+     */
+    fun toggleSelectionMode() {
+        val isSelectionMode = !_uiState.value.isSelectionMode
+        _uiState.value = _uiState.value.copyWithSelection(isSelectionMode, clearSelections = !isSelectionMode)
+    }
+
+    /**
+     * Toggle item selection
+     */
+    fun toggleSongSelection(songId: Long) {
+        val currentSelection = _uiState.value.selectedSongs.toMutableSet()
+        
+        if (currentSelection.contains(songId)) {
+            currentSelection.remove(songId)
+        } else {
+            currentSelection.add(songId)
+        }
+        
+        _uiState.value = _uiState.value.copy(selectedSongs = currentSelection)
+        
+        // Exit selection mode if no items selected
+        if (currentSelection.isEmpty()) {
+            _uiState.value = _uiState.value.copyWithSelection(false, clearSelections = true)
+        }
+    }
+
+    // =================================================================================
+    // NAVIGATION
+    // =================================================================================
+
+    /**
+     * Navigate to album
+     */
+    fun navigateToAlbum(album: Album) {
+        _uiState.value = _uiState.value.copy(selectedAlbumForNavigation = album)
+    }
+
+    /**
+     * Navigate to artist
+     */
+    fun navigateToArtist(artist: Artist) {
+        _uiState.value = _uiState.value.copy(selectedArtistForNavigation = artist)
+    }
+
+    /**
+     * Navigate to playlist
+     */
+    fun navigateToPlaylist(playlist: Playlist) {
+        _uiState.value = _uiState.value.copy(selectedPlaylistForNavigation = playlist)
+    }
+
+    /**
+     * Clear navigation states
+     */
+    fun clearNavigationStates() {
+        _uiState.value = _uiState.value.copy(
+            selectedSongForPlayback = null,
+            selectedAlbumForNavigation = null,
+            selectedArtistForNavigation = null,
+            selectedPlaylistForNavigation = null
+        )
+    }
+
+    // =================================================================================
+    // UI STATE MANAGEMENT
+    // =================================================================================
+
+    /**
+     * Toggle search history visibility
+     */
+    fun toggleSearchHistory() {
+        _uiState.value = _uiState.value.copy(
+            showSearchHistory = !_uiState.value.showSearchHistory
+        )
+    }
+
+    /**
+     * Toggle voice search dialog
+     */
+    fun toggleVoiceSearchDialog() {
+        if (_uiState.value.showVoiceSearchDialog) {
+            stopVoiceSearch()
+        } else if (_uiState.value.canUseVoiceSearch) {
+            startVoiceSearch()
+        }
+    }
+
+    /**
+     * Toggle create playlist dialog
+     */
+    fun toggleCreatePlaylistDialog() {
+        _uiState.value = _uiState.value.copy(
+            showCreatePlaylistDialog = !_uiState.value.showCreatePlaylistDialog
+        )
+    }
+
+    /**
+     * Clear error state
+     */
+    fun clearError() {
+        _uiState.value = _uiState.value.copy(
+            error = null,
+            songsError = null,
+            albumsError = null,
+            artistsError = null,
+            playlistsError = null,
+            voiceSearchError = null
+        )
+    }
+
+    // =================================================================================
+    // ANALYTICS
+    // =================================================================================
+
+    private fun updateSearchAnalytics(query: String, results: SearchResults, searchTime: Long) {
+        viewModelScope.launch {
+            try {
+                val analytics = _uiState.value.searchAnalytics
+                val isSuccessful = results.hasResults
+                
+                val updatedAnalytics = analytics.copy(
+                    totalSearches = analytics.totalSearches + 1,
+                    successfulSearches = if (isSuccessful) analytics.successfulSearches + 1 else analytics.successfulSearches,
+                    emptySearches = if (!isSuccessful) analytics.emptySearches + 1 else analytics.emptySearches,
+                    averageSearchTime = ((analytics.averageSearchTime * analytics.totalSearches) + searchTime) / (analytics.totalSearches + 1),
+                    mostSearchedTerms = (analytics.mostSearchedTerms + query).groupingBy { it }.eachCount()
+                        .toList().sortedByDescending { it.second }.take(10).map { it.first }
                 )
+                
+                _uiState.value = _uiState.value.copy(searchAnalytics = updatedAnalytics)
+            } catch (e: Exception) {
+                // Analytics failure is not critical
             }
         }
+    }
 
-        // Playlists section
-        if (uiState.searchResults.playlists.isNotEmpty()) {
-            item {
-                SearchSectionHeader(
-                    title = "Playlists",
-                    count = uiState.searchResults.playlists.size,
-                    onSeeAllClick = null,
-                    modifier = Modifier.padding(horizontal = horizontalPadding)
-                )
-            }
-
-            items(
-                items = uiState.searchResults.playlists.take(3),
-                key = { it.id }
-            ) { playlist ->
-                SearchPlaylistItem(
-                    playlist = playlist,
-                    query = uiState.searchQuery,
-                    onClick = { onPlaylistClick(playlist.id) },
-                    modifier = Modifier
-                        .padding(horizontal = horizontalPadding)
-                        .animateItemPlacement()
-                )
-            }
-        }
+    override fun onCleared() {
+        super.onCleared()
+        searchJob?.cancel()
+        suggestionsJob?.cancel()
+        voiceSearchJob?.cancel()
     }
 }
 
-@Composable
-private fun SearchLoadingState(
-    query: String,
-    modifier: Modifier = Modifier
-) {
-    Column(
-        modifier = modifier.padding(32.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
-    ) {
-        CircularProgressIndicator(
-            modifier = Modifier.size(48.dp),
-            color = MaterialTheme.colorScheme.primary
-        )
-        
-        Spacer(modifier = Modifier.height(16.dp))
-        
-        Text(
-            text = "Searching for \"$query\"...",
-            style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.onSurface,
-            textAlign = TextAlign.Center
-        )
-        
-        Text(
-            text = "Please wait while we find your music",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
-            textAlign = TextAlign.Center
-        )
-    }
-}
-
-@Composable
-private fun SearchNoResultsState(
-    query: String,
-    onTryAgain: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Column(
-        modifier = modifier.padding(32.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
-    ) {
-        Icon(
-            imageVector = Icons.Default.SearchOff,
-            contentDescription = null,
-            modifier = Modifier.size(64.dp),
-            tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)
-        )
-        
-        Spacer(modifier = Modifier.height(16.dp))
-        
-        Text(
-            text = "No results found",
-            style = MaterialTheme.typography.headlineSmall,
-            color = MaterialTheme.colorScheme.onSurface,
-            textAlign = TextAlign.Center
-        )
-        
-        Text(
-            text = "We couldn't find anything for \"$query\"",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
-            textAlign = TextAlign.Center
-        )
-        
-        Spacer(modifier = Modifier.height(24.dp))
-        
-        OutlinedButton(
-            onClick = onTryAgain,
-            modifier = Modifier.fillMaxWidth(0.6f)
-        ) {
-            Icon(
-                imageVector = Icons.Default.Refresh,
-                contentDescription = null,
-                modifier = Modifier.size(18.dp)
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-            Text("Try again")
-        }
-        
-        Spacer(modifier = Modifier.height(16.dp))
-        
-        Text(
-            text = "Try different keywords or check your spelling",
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
-            textAlign = TextAlign.Center
-        )
-    }
-}
-
-@Composable
-private fun ShowMoreButton(
-    text: String,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    TextButton(
-        onClick = onClick,
-        modifier = modifier.fillMaxWidth()
-    ) {
-        Text(
-            text = text,
-            style = MaterialTheme.typography.labelLarge
-        )
-        Spacer(modifier = Modifier.width(4.dp))
-        Icon(
-            imageVector = Icons.Default.ExpandMore,
-            contentDescription = null,
-            modifier = Modifier.size(16.dp)
-        )
-    }
+/**
+ * Voice search result sealed class
+ */
+sealed class VoiceSearchResult {
+    object Listening : VoiceSearchResult()
+    data class Speaking(val partialText: String) : VoiceSearchResult()
+    data class Success(val text: String) : VoiceSearchResult()
+    data class Error(val message: String) : VoiceSearchResult()
 }

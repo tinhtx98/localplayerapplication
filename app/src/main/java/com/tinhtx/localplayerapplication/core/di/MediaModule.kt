@@ -1,59 +1,83 @@
 package com.tinhtx.localplayerapplication.core.di
 
 import android.content.Context
-import androidx.annotation.OptIn
-import androidx.media3.common.AudioAttributes
-import androidx.media3.common.C
-import androidx.media3.common.util.UnstableApi
-import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
-import androidx.media3.session.MediaSession
+import coil.ImageLoader
+import com.tinhtx.localplayerapplication.data.local.cache.AlbumArtCache
+import com.tinhtx.localplayerapplication.data.local.cache.ImageCacheManager
+import com.tinhtx.localplayerapplication.data.local.media.AudioMetadataExtractor
+import com.tinhtx.localplayerapplication.data.local.media.MediaScanner
+import com.tinhtx.localplayerapplication.data.local.media.MediaStoreScanner
+import com.tinhtx.localplayerapplication.domain.service.MediaPlayerService
+import com.tinhtx.localplayerapplication.presentation.service.media.MediaPlayerServiceImpl
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
-import dagger.hilt.android.components.ServiceComponent
 import dagger.hilt.android.qualifiers.ApplicationContext
-import dagger.hilt.android.scopes.ServiceScoped
+import dagger.hilt.components.SingletonComponent
+import javax.inject.Singleton
 
+/**
+ * Dagger Hilt module for media-related dependencies
+ */
 @Module
-@InstallIn(ServiceComponent::class)
+@InstallIn(SingletonComponent::class)
 object MediaModule {
     
+    // ✅ FIXED: All methods using @Provides in object
     @Provides
-    @ServiceScoped
-    fun provideAudioAttributes(): AudioAttributes {
-        return AudioAttributes.Builder()
-            .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
-            .setUsage(C.USAGE_MEDIA)
-            .build()
-    }
-
-    @OptIn(UnstableApi::class)
-    @Provides
-    @ServiceScoped
-    fun provideExoPlayer(
-        @ApplicationContext context: Context,
-        audioAttributes: AudioAttributes
-    ): ExoPlayer {
-        val trackSelector = DefaultTrackSelector(context).apply {
-            setParameters(buildUponParameters().setMaxVideoSizeSd())
-        }
-        
-        return ExoPlayer.Builder(context)
-            .setTrackSelector(trackSelector)
-            .setAudioAttributes(audioAttributes, true)
-            .setHandleAudioBecomingNoisy(true)
-            .setWakeMode(C.WAKE_MODE_LOCAL)
-            .build()
+    @Singleton
+    fun provideMediaPlayerService(): MediaPlayerService {
+        return MediaPlayerServiceImpl()
     }
     
     @Provides
-    @ServiceScoped
-    fun provideMediaSession(
-        @ApplicationContext context: Context,
-        exoPlayer: ExoPlayer
-    ): MediaSession {
-        return MediaSession.Builder(context, exoPlayer)
+    @Singleton
+    fun provideImageLoader(
+        @ApplicationContext context: Context
+    ): ImageLoader {
+        return ImageLoader.Builder(context)
+            .crossfade(true)
+            .respectCacheHeaders(false)
             .build()
+    }
+
+    @Provides
+    @Singleton
+    fun provideAlbumArtCache(
+        @ApplicationContext context: Context
+    ): AlbumArtCache {
+        return AlbumArtCache(context)
+    }
+
+    @Provides
+    @Singleton
+    fun provideImageCacheManager(
+        @ApplicationContext context: Context,
+        imageLoader: ImageLoader
+    ): ImageCacheManager {
+        return ImageCacheManager(context, imageLoader)
+    }
+
+    @Provides
+    @Singleton
+    fun provideAudioMetadataExtractor(): AudioMetadataExtractor {
+        return AudioMetadataExtractor()
+    }
+
+    @Provides
+    @Singleton
+    fun provideMediaScanner(
+        @ApplicationContext context: Context,
+        audioMetadataExtractor: AudioMetadataExtractor
+    ): MediaScanner {
+        return MediaScanner(context, audioMetadataExtractor)
+    }
+
+    @Provides
+    @Singleton
+    fun provideMediaStoreScanner(
+        @ApplicationContext context: Context
+    ): MediaStoreScanner {
+        return MediaStoreScanner(context)
     }
 }

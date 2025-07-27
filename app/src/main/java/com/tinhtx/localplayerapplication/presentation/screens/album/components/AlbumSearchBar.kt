@@ -6,111 +6,121 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.unit.dp
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AlbumSearchBar(
     searchQuery: String,
-    onSearchQueryChange: (String) -> Unit,
-    modifier: Modifier = Modifier,
-    placeholder: String = "Search tracks in this album..."
-) {
-    val focusRequester = remember { FocusRequester() }
-
-    LaunchedEffect(Unit) {
-        focusRequester.requestFocus()
-    }
-
-    OutlinedTextField(
-        value = searchQuery,
-        onValueChange = onSearchQueryChange,
-        modifier = modifier
-            .fillMaxWidth()
-            .focusRequester(focusRequester),
-        placeholder = {
-            Text(
-                text = placeholder,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-            )
-        },
-        leadingIcon = {
-            Icon(
-                imageVector = Icons.Default.Search,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary
-            )
-        },
-        trailingIcon = {
-            if (searchQuery.isNotEmpty()) {
-                IconButton(
-                    onClick = { onSearchQueryChange("") }
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Clear,
-                        contentDescription = "Clear search",
-                        tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                    )
-                }
-            }
-        },
-        singleLine = true,
-        colors = OutlinedTextFieldDefaults.colors(
-            focusedBorderColor = MaterialTheme.colorScheme.primary,
-            unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f),
-            focusedContainerColor = MaterialTheme.colorScheme.surface,
-            unfocusedContainerColor = MaterialTheme.colorScheme.surface
-        ),
-        shape = RoundedCornerShape(12.dp)
-    )
-}
-
-@Composable
-fun AlbumTracksHeader(
-    trackCount: Int,
-    totalDuration: String,
-    isSearching: Boolean,
-    searchQuery: String,
+    onSearchQueryChanged: (String) -> Unit,
+    isSearchActive: Boolean,
+    onActiveChanged: (Boolean) -> Unit,
+    songCount: Int,
+    filteredCount: Int,
+    onSortClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Card(
-        modifier = modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
-        )
-    ) {
-        Row(
+    Column(modifier = modifier) {
+        // Search bar
+        SearchBar(
+            query = searchQuery,
+            onQueryChange = onSearchQueryChanged,
+            onSearch = { onActiveChanged(false) },
+            active = isSearchActive,
+            onActiveChange = onActiveChanged,
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp),
-            horizontalArrangement = Arrangement.SpaceBetween
+                .padding(horizontal = if (isSearchActive) 0.dp else 16.dp),
+            placeholder = {
+                Text(
+                    text = "Search songs in album...",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            },
+            leadingIcon = {
+                Icon(
+                    imageVector = Icons.Default.Search,
+                    contentDescription = "Search",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            },
+            trailingIcon = {
+                Row {
+                    if (searchQuery.isNotEmpty()) {
+                        IconButton(
+                            onClick = {
+                                onSearchQueryChanged("")
+                                if (isSearchActive) {
+                                    onActiveChanged(false)
+                                }
+                            }
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Clear,
+                                contentDescription = "Clear search",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+
+                    IconButton(onClick = onSortClick) {
+                        Icon(
+                            imageVector = Icons.Default.Sort,
+                            contentDescription = "Sort songs",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            },
+            colors = SearchBarDefaults.colors(
+                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f)
+            ),
+            shape = RoundedCornerShape(28.dp)
         ) {
-            Column {
-                if (isSearching && searchQuery.isNotBlank()) {
+            // Search suggestions or results
+            if (searchQuery.isBlank()) {
+                SearchSuggestions()
+            } else {
+                SearchResults(
+                    query = searchQuery,
+                    resultCount = filteredCount
+                )
+            }
+        }
+
+        // Results count
+        if (searchQuery.isNotEmpty() && !isSearchActive) {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 4.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.secondaryContainer
+                )
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(12.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                     Text(
-                        text = "Search results for \"$searchQuery\"",
-                        style = MaterialTheme.typography.titleSmall,
-                        color = MaterialTheme.colorScheme.onSurface
+                        text = "Showing $filteredCount of $songCount songs",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer
                     )
-                    Text(
-                        text = "$trackCount tracks found",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
-                    )
-                } else {
-                    Text(
-                        text = "Album Tracks",
-                        style = MaterialTheme.typography.titleSmall,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    Text(
-                        text = "$trackCount tracks • $totalDuration",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
-                    )
+
+                    if (filteredCount < songCount) {
+                        TextButton(
+                            onClick = { onSearchQueryChanged("") }
+                        ) {
+                            Text("Clear")
+                        }
+                    }
                 }
             }
         }
@@ -118,35 +128,74 @@ fun AlbumTracksHeader(
 }
 
 @Composable
-fun AlbumSearchNoResults(
-    query: String,
-    albumName: String,
-    modifier: Modifier = Modifier
-) {
+private fun SearchSuggestions() {
     Column(
-        modifier = modifier,
-        horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(16.dp)
     ) {
-        Icon(
-            imageVector = Icons.Default.SearchOff,
-            contentDescription = null,
-            modifier = Modifier.size(48.dp),
-            tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)
-        )
-        
-        Spacer(modifier = Modifier.height(16.dp))
-        
         Text(
-            text = "No tracks found",
+            text = "Search in this album",
             style = MaterialTheme.typography.titleMedium,
             color = MaterialTheme.colorScheme.onSurface
         )
-        
-        Text(
-            text = "No tracks match \"$query\" in \"$albumName\"",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
-            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        val suggestions = listOf(
+            "Song titles",
+            "By duration",
+            "Popular tracks",
+            "Recently played"
         )
+
+        suggestions.forEach { suggestion ->
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Search,
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(modifier = Modifier.width(12.dp))
+                Text(
+                    text = suggestion,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun SearchResults(
+    query: String,
+    resultCount: Int
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(16.dp)
+    ) {
+        Text(
+            text = "$resultCount results for \"$query\"",
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+
+        if (resultCount == 0) {
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = "No songs found matching your search",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
     }
 }

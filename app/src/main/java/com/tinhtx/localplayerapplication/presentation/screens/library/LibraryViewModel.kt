@@ -2,451 +2,812 @@ package com.tinhtx.localplayerapplication.presentation.screens.library
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.tinhtx.localplayerapplication.core.constants.AppConstants
 import com.tinhtx.localplayerapplication.domain.model.*
-import com.tinhtx.localplayerapplication.domain.usecase.favorites.*
 import com.tinhtx.localplayerapplication.domain.usecase.music.*
-import com.tinhtx.localplayerapplication.domain.usecase.player.PlaySongUseCase
-import com.tinhtx.localplayerapplication.domain.usecase.playlist.*
+import com.tinhtx.localplayerapplication.domain.usecase.playlist.GetPlaylistsUseCase
+import com.tinhtx.localplayerapplication.domain.usecase.favorites.*
+import com.tinhtx.localplayerapplication.domain.usecase.settings.GetAppSettingsUseCase
+import com.tinhtx.localplayerapplication.domain.usecase.settings.UpdateSettingsUseCase
+import com.tinhtx.localplayerapplication.domain.repository.MusicRepository
+import com.tinhtx.localplayerapplication.domain.repository.PlaylistRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.Job
 import javax.inject.Inject
 
+/**
+ * ViewModel for Library Screen - Complete integration with all music use cases
+ */
 @HiltViewModel
 class LibraryViewModel @Inject constructor(
+    // Music Use Cases
     private val getAllSongsUseCase: GetAllSongsUseCase,
     private val getAllAlbumsUseCase: GetAllAlbumsUseCase,
     private val getAllArtistsUseCase: GetAllArtistsUseCase,
+    private val searchSongsUseCase: SearchSongsUseCase,
+    private val getSongsByAlbumUseCase: GetSongsByAlbumUseCase,
+    private val getSongsByArtistUseCase: GetSongsByArtistUseCase,
+    private val scanMediaLibraryUseCase: ScanMediaLibraryUseCase,
+    
+    // Playlist Use Cases
     private val getPlaylistsUseCase: GetPlaylistsUseCase,
+    
+    // Favorites Use Cases
     private val getFavoritesUseCase: GetFavoritesUseCase,
     private val addToFavoritesUseCase: AddToFavoritesUseCase,
     private val removeFromFavoritesUseCase: RemoveFromFavoritesUseCase,
-    private val playSongUseCase: PlaySongUseCase,
-    private val scanMediaLibraryUseCase: ScanMediaLibraryUseCase
+    
+    // Settings Use Cases
+    private val getAppSettingsUseCase: GetAppSettingsUseCase,
+    private val updateSettingsUseCase: UpdateSettingsUseCase,
+    
+    // Repositories
+    private val musicRepository: MusicRepository,
+    private val playlistRepository: PlaylistRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(LibraryUiState())
     val uiState: StateFlow<LibraryUiState> = _uiState.asStateFlow()
 
-    private val _selectedTabIndex = MutableStateFlow(0)
-    private val _searchQuery = MutableStateFlow("")
-    private val _sortOrder = MutableStateFlow(AppConstants.SortOrder.TITLE_ASC)
-    private val _viewMode = MutableStateFlow(AppConstants.ViewMode.LIST)
-    private val _gridSize = MutableStateFlow(AppConstants.GridSize.MEDIUM)
-    private val _activeFilters = MutableStateFlow<List<LibraryFilter>>(emptyList())
-    private val _isSearching = MutableStateFlow(false)
+    private var searchJob: Job? = null
+    private var refreshJob: Job? = null
 
     init {
-        observeUserInputs()
+        loadAllData()
+        observeSettings()
+        observeFavorites()
     }
 
-    private fun observeUserInputs() {
-        viewModelScope.launch {
-            combine(
-                _selectedTabIndex,
-                _searchQuery,
-                _sortOrder,
-                _viewMode,
-                _gridSize,
-                _activeFilters,
-                _isSearching
-            ) { tabIndex, query, sortOrder, viewMode, gridSize, filters, isSearching ->
-                _uiState.value = _uiState.value.copy(
-                    selectedTabIndex = tabIndex,
-                    searchQuery = query,
-                    sortOrder = sortOrder,
-                    viewMode = viewMode,
-                    gridSize = gridSize,
-                    activeFilters = filters,
-                    isSearching = isSearching
-                )
-                
-                // Apply search and filters when they change
-                applySearchAndFilters()
-            }.collect()
+    // ====================================================================================
+    // TAB MANAGEMENT
+    // ====================================================================================
+
+    /**
+     * Switch to different library tab
+     */
+    fun selectTab(tab: LibraryTab) {
+        if (_uiState.value.selectedTab == tab) return
+        
+        _uiState.value = _uiState.value.copyWithTab(tab)
+        
+        // Load data for selected tab if not loaded
+        when (tab) {
+            LibraryTab.SONGS -> if (_uiState.value.songs.isEmpty()) loadSongs()
+            LibraryTab.ALBUMS -> if (_uiState.value.albums.isEmpty()) loadAlbums()
+            LibraryTab.ARTISTS -> if (_uiState.value.artists.isEmpty()) loadArtists()
+            LibraryTab.PLAYLISTS -> if (_uiState.value.playlists.isEmpty()) loadPlaylists()
+            LibraryTab.GENRES -> if (_uiState.value.genres.isEmpty()) loadGenres()
         }
     }
 
-    fun loadLibraryData() {
-        viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isLoading = true, error = null)
+    // ====================================================================================
+    // DATA LOADING
+    // ====================================================================================
 
+    /**
+     * Load all library data
+     */
+    fun loadAllData() {
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copyWithLoading(true)
+            
             try {
-                combine(
-                    getAllSongsUseCase(),
-                    getAllAlbumsUseCase(),
-                    getAllArtistsUseCase(),
-                    getPlaylistsUseCase(),
-                    getFavoritesUseCase()
-                ) { songs, albums, artists, playlists, favorites ->
-                    LibraryData(songs, albums, artists, playlists, favorites)
-                }.catch { exception ->
-                    _uiState.value = _uiState.value.copy(
-                        isLoading = false,
-                        error = exception.message ?: "Failed to load library"
-                    )
-                }.collect { libraryData ->
-                    val stats = calculateLibraryStats(libraryData)
-                    val tabCounts = calculateTabCounts(libraryData)
-                    
-                    _uiState.value = _uiState.value.copy(
-                        isLoading = false,
-                        error = null,
-                        songs = applySorting(libraryData.songs, LibraryTab.SONGS),
-                        albums = applySorting(libraryData.albums, LibraryTab.ALBUMS),
-                        artists = applySorting(libraryData.artists, LibraryTab.ARTISTS),
-                        playlists = applySorting(libraryData.playlists, LibraryTab.PLAYLISTS),
-                        favorites = libraryData.favorites,
-                        libraryStats = stats,
-                        tabCounts = tabCounts,
-                        isEmpty = libraryData.songs.isEmpty() && 
-                                 libraryData.albums.isEmpty() && 
-                                 libraryData.artists.isEmpty()
-                    )
-                    
-                    applySearchAndFilters()
-                }
-            } catch (exception) {
-                _uiState.value = _uiState.value.copy(
-                    isLoading = false,
-                    error = exception.message ?: "Failed to load library data"
-                )
+                // Load data concurrently
+                val songsDeferred = async { loadSongs() }
+                val albumsDeferred = async { loadAlbums() }
+                val artistsDeferred = async { loadArtists() }
+                val playlistsDeferred = async { loadPlaylists() }
+                val genresDeferred = async { loadGenres() }
+                val statsDeferred = async { loadLibraryStats() }
+
+                awaitAll(songsDeferred, albumsDeferred, artistsDeferred, playlistsDeferred, genresDeferred, statsDeferred)
+                
+                _uiState.value = _uiState.value.copy(isLoading = false, error = null)
+                
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copyWithError("Failed to load library: ${e.message}")
             }
         }
     }
 
-    private fun applySearchAndFilters() {
-        val currentState = _uiState.value
-        val query = _searchQuery.value
-        val filters = _activeFilters.value
+    /**
+     * Load songs data
+     */
+    private suspend fun loadSongs() {
+        try {
+            _uiState.value = _uiState.value.copy(songsLoading = true, songsError = null)
+            
+            getAllSongsUseCase.getAllSongs().first().let { songs ->
+                _uiState.value = _uiState.value.copyWithSongs(songs)
+                
+                // Load recent activity
+                loadRecentActivity()
+            }
+        } catch (e: Exception) {
+            _uiState.value = _uiState.value.copyWithSongs(emptyList(), "Failed to load songs: ${e.message}")
+        }
+    }
 
-        if (query.isBlank() && filters.isEmpty()) {
-            _uiState.value = currentState.copy(
-                filteredSongs = emptyList(),
-                filteredAlbums = emptyList(),
-                filteredArtists = emptyList(),
-                filteredPlaylists = emptyList()
+    /**
+     * Load albums data
+     */
+    private suspend fun loadAlbums() {
+        try {
+            _uiState.value = _uiState.value.copy(albumsLoading = true, albumsError = null)
+            
+            getAllAlbumsUseCase.getAllAlbums().first().let { albums ->
+                _uiState.value = _uiState.value.copyWithAlbums(albums)
+            }
+        } catch (e: Exception) {
+            _uiState.value = _uiState.value.copyWithAlbums(emptyList(), "Failed to load albums: ${e.message}")
+        }
+    }
+
+    /**
+     * Load artists data
+     */
+    private suspend fun loadArtists() {
+        try {
+            _uiState.value = _uiState.value.copy(artistsLoading = true, artistsError = null)
+            
+            getAllArtistsUseCase.getAllArtists().first().let { artists ->
+                _uiState.value = _uiState.value.copyWithArtists(artists)
+            }
+        } catch (e: Exception) {
+            _uiState.value = _uiState.value.copyWithArtists(emptyList(), "Failed to load artists: ${e.message}")
+        }
+    }
+
+    /**
+     * Load playlists data
+     */
+    private suspend fun loadPlaylists() {
+        try {
+            _uiState.value = _uiState.value.copy(playlistsLoading = true, playlistsError = null)
+            
+            getPlaylistsUseCase.getAllPlaylists().first().let { playlists ->
+                _uiState.value = _uiState.value.copyWithPlaylists(playlists)
+            }
+        } catch (e: Exception) {
+            _uiState.value = _uiState.value.copyWithPlaylists(emptyList(), "Failed to load playlists: ${e.message}")
+        }
+    }
+
+    /**
+     * Load genres data
+     */
+    private suspend fun loadGenres() {
+        try {
+            _uiState.value = _uiState.value.copy(genresLoading = true, genresError = null)
+            
+            val genres = musicRepository.getAllGenres()
+            _uiState.value = _uiState.value.copy(
+                genres = genres,
+                genresLoading = false,
+                genresError = null
+            )
+        } catch (e: Exception) {
+            _uiState.value = _uiState.value.copy(
+                genres = emptyList(),
+                genresLoading = false,
+                genresError = "Failed to load genres: ${e.message}"
+            )
+        }
+    }
+
+    /**
+     * Load library statistics
+     */
+    private suspend fun loadLibraryStats() {
+        try {
+            _uiState.value = _uiState.value.copy(statsLoading = true)
+            
+            val totalSongs = musicRepository.getSongCount()
+            val totalAlbums = musicRepository.getAlbumCount()
+            val totalArtists = musicRepository.getArtistCount()
+            val totalDuration = musicRepository.getTotalDuration()
+            val totalSize = musicRepository.getTotalSize()
+            val genres = musicRepository.getAllGenres()
+            val playlists = playlistRepository.getAllPlaylists().first()
+            
+            val stats = LibraryStatistics(
+                totalSongs = totalSongs,
+                totalAlbums = totalAlbums,
+                totalArtists = totalArtists,
+                totalPlaylists = playlists.size,
+                totalGenres = genres.size,
+                totalDuration = totalDuration,
+                totalSize = totalSize,
+                averageSongDuration = if (totalSongs > 0) totalDuration / totalSongs else 0L,
+                favoritesCount = _uiState.value.favoriteSongs.size
+            )
+            
+            _uiState.value = _uiState.value.copy(
+                libraryStats = stats,
+                statsLoading = false
+            )
+        } catch (e: Exception) {
+            _uiState.value = _uiState.value.copy(statsLoading = false)
+        }
+    }
+
+    /**
+     * Load recent activity
+     */
+    private suspend fun loadRecentActivity() {
+        try {
+            val recentlyAdded = musicRepository.getRecentlyAddedSongs(20)
+            val recentlyPlayed = musicRepository.getRecentlyPlayedSongs(20)
+            val mostPlayed = musicRepository.getMostPlayedSongs(20)
+            
+            _uiState.value = _uiState.value.copy(
+                recentlyAdded = recentlyAdded,
+                recentlyPlayed = recentlyPlayed,
+                mostPlayed = mostPlayed
+            )
+        } catch (e: Exception) {
+            // Silent failure for recent activity
+        }
+    }
+
+    // ====================================================================================
+    // SEARCH FUNCTIONALITY
+    // ====================================================================================
+
+    /**
+     * Perform search with debouncing
+     */
+    fun searchLibrary(query: String) {
+        searchJob?.cancel()
+        
+        _uiState.value = _uiState.value.copyWithSearch(query, query.isNotBlank())
+        
+        if (query.isBlank()) {
+            _uiState.value = _uiState.value.copy(
+                searchResults = emptyList(),
+                searchLoading = false
             )
             return
         }
-
-        // Apply search
-        val searchFilteredSongs = if (query.isBlank()) currentState.songs else {
-            currentState.songs.filter { song ->
-                song.title.contains(query, ignoreCase = true) ||
-                song.displayArtist.contains(query, ignoreCase = true) ||
-                song.displayAlbum.contains(query, ignoreCase = true)
-            }
-        }
-
-        val searchFilteredAlbums = if (query.isBlank()) currentState.albums else {
-            currentState.albums.filter { album ->
-                album.displayName.contains(query, ignoreCase = true) ||
-                album.displayArtist.contains(query, ignoreCase = true)
-            }
-        }
-
-        val searchFilteredArtists = if (query.isBlank()) currentState.artists else {
-            currentState.artists.filter { artist ->
-                artist.displayName.contains(query, ignoreCase = true)
-            }
-        }
-
-        val searchFilteredPlaylists = if (query.isBlank()) currentState.playlists else {
-            currentState.playlists.filter { playlist ->
-                playlist.name.contains(query, ignoreCase = true)
-            }
-        }
-
-        // Apply filters (if any)
-        val finalFilteredSongs = applyFilters(searchFilteredSongs, filters)
-        val finalFilteredAlbums = applyFilters(searchFilteredAlbums, filters)
-        val finalFilteredArtists = applyFilters(searchFilteredArtists, filters)
-        val finalFilteredPlaylists = applyFilters(searchFilteredPlaylists, filters)
-
-        _uiState.value = currentState.copy(
-            filteredSongs = finalFilteredSongs,
-            filteredAlbums = finalFilteredAlbums,
-            filteredArtists = finalFilteredArtists,
-            filteredPlaylists = finalFilteredPlaylists
-        )
-    }
-
-    private fun <T> applyFilters(items: List<T>, filters: List<LibraryFilter>): List<T> {
-        if (filters.isEmpty()) return items
         
-        return items.filter { item ->
-            filters.all { filter ->
-                when (filter.type) {
-                    LibraryFilterType.YEAR -> {
-                        when (item) {
-                            is Song -> item.year in filter.yearRange
-                            is Album -> item.year in filter.yearRange
-                            else -> true
-                        }
-                    }
-                    LibraryFilterType.GENRE -> {
-                        when (item) {
-                            is Song -> item.genre.equals(filter.value, ignoreCase = true)
-                            else -> true
-                        }
-                    }
-                    LibraryFilterType.FAVORITES_ONLY -> {
-                        when (item) {
-                            is Song -> item.isFavorite
-                            else -> true
-                        }
-                    }
-                    LibraryFilterType.DURATION -> {
-                        when (item) {
-                            is Song -> item.duration in filter.durationRange
-                            else -> true
-                        }
-                    }
-                    else -> true
+        searchJob = viewModelScope.launch {
+            kotlinx.coroutines.delay(300) // Debounce delay
+            
+            try {
+                _uiState.value = _uiState.value.copy(searchLoading = true)
+                
+                searchSongsUseCase.searchSongs(query).first().let { results ->
+                    _uiState.value = _uiState.value.copy(
+                        searchResults = results,
+                        searchLoading = false
+                    )
                 }
-            }
-        }
-    }
-
-    private fun <T> applySorting(items: List<T>, tab: LibraryTab): List<T> {
-        val sortOrder = _sortOrder.value
-        
-        return when (tab) {
-            LibraryTab.SONGS -> {
-                val songs = items as List<Song>
-                when (sortOrder) {
-                    AppConstants.SortOrder.TITLE_ASC -> songs.sortedBy { it.title.lowercase() }
-                    AppConstants.SortOrder.TITLE_DESC -> songs.sortedByDescending { it.title.lowercase() }
-                    AppConstants.SortOrder.ARTIST_ASC -> songs.sortedBy { it.displayArtist.lowercase() }
-                    AppConstants.SortOrder.ARTIST_DESC -> songs.sortedByDescending { it.displayArtist.lowercase() }
-                    AppConstants.SortOrder.ALBUM_ASC -> songs.sortedBy { it.displayAlbum.lowercase() }
-                    AppConstants.SortOrder.ALBUM_DESC -> songs.sortedByDescending { it.displayAlbum.lowercase() }
-                    AppConstants.SortOrder.DURATION_ASC -> songs.sortedBy { it.duration }
-                    AppConstants.SortOrder.DURATION_DESC -> songs.sortedByDescending { it.duration }
-                    AppConstants.SortOrder.DATE_ADDED_ASC -> songs.sortedBy { it.dateAdded }
-                    AppConstants.SortOrder.DATE_ADDED_DESC -> songs.sortedByDescending { it.dateAdded }
-                } as List<T>
-            }
-            LibraryTab.ALBUMS -> {
-                val albums = items as List<Album>
-                when (sortOrder) {
-                    AppConstants.SortOrder.TITLE_ASC -> albums.sortedBy { it.displayName.lowercase() }
-                    AppConstants.SortOrder.TITLE_DESC -> albums.sortedByDescending { it.displayName.lowercase() }
-                    AppConstants.SortOrder.ARTIST_ASC -> albums.sortedBy { it.displayArtist.lowercase() }
-                    AppConstants.SortOrder.ARTIST_DESC -> albums.sortedByDescending { it.displayArtist.lowercase() }
-                    AppConstants.SortOrder.DATE_ADDED_ASC -> albums.sortedBy { it.year }
-                    AppConstants.SortOrder.DATE_ADDED_DESC -> albums.sortedByDescending { it.year }
-                    else -> albums.sortedBy { it.displayName.lowercase() }
-                } as List<T>
-            }
-            LibraryTab.ARTISTS -> {
-                val artists = items as List<Artist>
-                when (sortOrder) {
-                    AppConstants.SortOrder.TITLE_ASC -> artists.sortedBy { it.displayName.lowercase() }
-                    AppConstants.SortOrder.TITLE_DESC -> artists.sortedByDescending { it.displayName.lowercase() }
-                    else -> artists.sortedBy { it.displayName.lowercase() }
-                } as List<T>
-            }
-            LibraryTab.PLAYLISTS -> {
-                val playlists = items as List<Playlist>
-                when (sortOrder) {
-                    AppConstants.SortOrder.TITLE_ASC -> playlists.sortedBy { it.name.lowercase() }
-                    AppConstants.SortOrder.TITLE_DESC -> playlists.sortedByDescending { it.name.lowercase() }
-                    AppConstants.SortOrder.DATE_ADDED_ASC -> playlists.sortedBy { it.dateCreated }
-                    AppConstants.SortOrder.DATE_ADDED_DESC -> playlists.sortedByDescending { it.dateCreated }
-                    else -> playlists.sortedBy { it.name.lowercase() }
-                } as List<T>
-            }
-        }
-    }
-
-    private fun calculateLibraryStats(libraryData: LibraryData): LibraryStats {
-        val totalDuration = libraryData.songs.sumOf { it.duration }
-        
-        return LibraryStats(
-            totalSongs = libraryData.songs.size,
-            totalAlbums = libraryData.albums.size,
-            totalArtists = libraryData.artists.size,
-            totalPlaylists = libraryData.playlists.size,
-            totalFavorites = libraryData.favorites.size,
-            totalDuration = formatDuration(totalDuration)
-        )
-    }
-
-    private fun calculateTabCounts(libraryData: LibraryData): Map<LibraryTab, Int> {
-        return mapOf(
-            LibraryTab.SONGS to libraryData.songs.size,
-            LibraryTab.ALBUMS to libraryData.albums.size,
-            LibraryTab.ARTISTS to libraryData.artists.size,
-            LibraryTab.PLAYLISTS to libraryData.playlists.size
-        )
-    }
-
-    fun selectTab(tabIndex: Int) {
-        _selectedTabIndex.value = tabIndex
-    }
-
-    fun toggleSearchMode() {
-        _isSearching.value = !_isSearching.value
-        if (!_isSearching.value) {
-            _searchQuery.value = ""
-        }
-    }
-
-    fun updateSearchQuery(query: String) {
-        _searchQuery.value = query
-    }
-
-    fun updateSortOrder(sortOrder: AppConstants.SortOrder) {
-        _sortOrder.value = sortOrder
-        // Re-apply sorting to current data
-        val currentState = _uiState.value
-        _uiState.value = currentState.copy(
-            songs = applySorting(currentState.songs, LibraryTab.SONGS),
-            albums = applySorting(currentState.albums, LibraryTab.ALBUMS),
-            artists = applySorting(currentState.artists, LibraryTab.ARTISTS),
-            playlists = applySorting(currentState.playlists, LibraryTab.PLAYLISTS)
-        )
-        applySearchAndFilters()
-    }
-
-    fun updateViewMode(viewMode: AppConstants.ViewMode) {
-        _viewMode.value = viewMode
-    }
-
-    fun toggleViewMode() {
-        _viewMode.value = if (_viewMode.value == AppConstants.ViewMode.LIST) {
-            AppConstants.ViewMode.GRID
-        } else {
-            AppConstants.ViewMode.LIST
-        }
-    }
-
-    fun updateGridSize(gridSize: AppConstants.GridSize) {
-        _gridSize.value = gridSize
-    }
-
-    fun updateFilters(filters: List<LibraryFilter>) {
-        _activeFilters.value = filters
-    }
-
-    fun removeFilter(filter: LibraryFilter) {
-        _activeFilters.value = _activeFilters.value - filter
-    }
-
-    fun clearAllFilters() {
-        _activeFilters.value = emptyList()
-    }
-
-    fun playSong(song: Song) {
-        viewModelScope.launch {
-            try {
-                playSongUseCase(song, "library_screen")
-            } catch (exception) {
-                android.util.Log.e("LibraryViewModel", "Failed to play song", exception)
-            }
-        }
-    }
-
-    fun playAlbum(album: Album) {
-        viewModelScope.launch {
-            try {
-                // Get songs from album and play first one
-                android.util.Log.d("LibraryViewModel", "Playing album: ${album.displayName}")
-            } catch (exception) {
-                android.util.Log.e("LibraryViewModel", "Failed to play album", exception)
-            }
-        }
-    }
-
-    fun playArtist(artist: Artist) {
-        viewModelScope.launch {
-            try {
-                // Get songs from artist and play shuffled
-                android.util.Log.d("LibraryViewModel", "Playing artist: ${artist.displayName}")
-            } catch (exception) {
-                android.util.Log.e("LibraryViewModel", "Failed to play artist", exception)
-            }
-        }
-    }
-
-    fun toggleFavorite(song: Song) {
-        viewModelScope.launch {
-            try {
-                if (song.isFavorite) {
-                    removeFromFavoritesUseCase(song.id)
-                } else {
-                    addToFavoritesUseCase(song.id)
-                }
-            } catch (exception) {
-                android.util.Log.e("LibraryViewModel", "Failed to toggle favorite", exception)
-            }
-        }
-    }
-
-    fun showAddToPlaylistDialog(song: Song) {
-        android.util.Log.d("LibraryViewModel", "Show add to playlist dialog for: ${song.title}")
-    }
-
-    fun showCreatePlaylistDialog() {
-        android.util.Log.d("LibraryViewModel", "Show create playlist dialog")
-    }
-
-    fun retryLoadLibrary() {
-        loadLibraryData()
-    }
-
-    fun startMediaScan() {
-        viewModelScope.launch {
-            try {
-                scanMediaLibraryUseCase.performFullScan()
-                loadLibraryData()
-            } catch (exception) {
+            } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
-                    error = "Failed to scan media library: ${exception.message}"
+                    searchResults = emptyList(),
+                    searchLoading = false
                 )
             }
         }
     }
 
-    private fun formatDuration(durationMs: Long): String {
-        val hours = durationMs / (1000 * 60 * 60)
-        val minutes = (durationMs % (1000 * 60 * 60)) / (1000 * 60)
-        
-        return if (hours > 0) {
-            "${hours}h ${minutes}m"
-        } else {
-            "${minutes}m"
+    /**
+     * Clear search
+     */
+    fun clearSearch() {
+        searchJob?.cancel()
+        _uiState.value = _uiState.value.copyWithSearch("", false)
+    }
+
+    // ====================================================================================
+    // SORTING AND FILTERING
+    // ====================================================================================
+
+    /**
+     * Update sort order
+     */
+    fun updateSortOrder(sortOrder: SortOrder, ascending: Boolean = true) {
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(
+                sortOrder = sortOrder,
+                sortAscending = ascending
+            )
+            
+            // Save to preferences
+            updateSettingsUseCase.updateSortOrder(sortOrder)
         }
     }
-}
 
-private data class LibraryData(
-    val songs: List<Song>,
-    val albums: List<Album>,
-    val artists: List<Artist>,
-    val playlists: List<Playlist>,
-    val favorites: List<Song>
-)
+    /**
+     * Toggle sort direction
+     */
+    fun toggleSortDirection() {
+        _uiState.value = _uiState.value.copy(
+            sortAscending = !_uiState.value.sortAscending
+        )
+    }
 
-data class LibraryStats(
-    val totalSongs: Int = 0,
-    val totalAlbums: Int = 0,
-    val totalArtists: Int = 0,
-    val totalPlaylists: Int = 0,
-    val totalFavorites: Int = 0,
-    val totalDuration: String = ""
-)
+    /**
+     * Filter by favorites
+     */
+    fun filterByFavorites(enabled: Boolean) {
+        _uiState.value = _uiState.value.copy(filterByFavorites = enabled)
+    }
 
-data class LibraryFilter(
-    val type: LibraryFilterType,
-    val value: String = "",
-    val yearRange: IntRange = IntRange.EMPTY,
-    val durationRange: LongRange = LongRange.EMPTY
-)
+    /**
+     * Filter by genre
+     */
+    fun filterByGenre(genre: String?) {
+        _uiState.value = _uiState.value.copy(selectedGenre = genre)
+    }
 
-enum class LibraryFilterType {
-    YEAR, GENRE, FAVORITES_ONLY, DURATION, ARTIST, ALBUM
+    /**
+     * Filter by artist
+     */
+    fun filterByArtist(artist: String?) {
+        _uiState.value = _uiState.value.copy(selectedArtist = artist)
+    }
+
+    /**
+     * Filter by album
+     */
+    fun filterByAlbum(album: String?) {
+        _uiState.value = _uiState.value.copy(selectedAlbum = album)
+    }
+
+    /**
+     * Clear all filters
+     */
+    fun clearAllFilters() {
+        _uiState.value = _uiState.value.copy(
+            filterByFavorites = false,
+            selectedGenre = null,
+            selectedArtist = null,
+            selectedAlbum = null
+        )
+    }
+
+    // ====================================================================================
+    // VIEW MODE MANAGEMENT
+    // ====================================================================================
+
+    /**
+     * Update view mode
+     */
+    fun updateViewMode(viewMode: LibraryViewMode) {
+        _uiState.value = _uiState.value.copy(viewMode = viewMode)
+    }
+
+    /**
+     * Update grid size
+     */
+    fun updateGridSize(gridSize: GridSize) {
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(gridSize = gridSize)
+            updateSettingsUseCase.updateGridSize(gridSize)
+        }
+    }
+
+    /**
+     * Toggle album art display
+     */
+    fun toggleAlbumArt() {
+        _uiState.value = _uiState.value.copy(showAlbumArt = !_uiState.value.showAlbumArt)
+    }
+
+    /**
+     * Toggle details display
+     */
+    fun toggleDetails() {
+        _uiState.value = _uiState.value.copy(showDetails = !_uiState.value.showDetails)
+    }
+
+    // ====================================================================================
+    // SELECTION MODE
+    // ====================================================================================
+
+    /**
+     * Toggle selection mode
+     */
+    fun toggleSelectionMode() {
+        val isSelectionMode = !_uiState.value.isSelectionMode
+        _uiState.value = _uiState.value.copyWithSelection(isSelectionMode)
+    }
+
+    /**
+     * Select/deselect item
+     */
+    fun toggleItemSelection(itemId: Long) {
+        val currentSelection = _uiState.value.selectedItems.toMutableSet()
+        
+        if (currentSelection.contains(itemId)) {
+            currentSelection.remove(itemId)
+        } else {
+            currentSelection.add(itemId)
+        }
+        
+        _uiState.value = _uiState.value.copy(selectedItems = currentSelection)
+        
+        // Exit selection mode if no items selected
+        if (currentSelection.isEmpty()) {
+            _uiState.value = _uiState.value.copyWithSelection(false)
+        }
+    }
+
+    /**
+     * Select all items in current tab
+     */
+    fun selectAllItems() {
+        val allItemIds = when (_uiState.value.selectedTab) {
+            LibraryTab.SONGS -> _uiState.value.filteredSongs.map { it.id }
+            LibraryTab.ALBUMS -> _uiState.value.filteredAlbums.map { it.id }
+            LibraryTab.ARTISTS -> _uiState.value.filteredArtists.map { it.id }
+            LibraryTab.PLAYLISTS -> _uiState.value.filteredPlaylists.map { it.id }
+            LibraryTab.GENRES -> emptyList() // Genres don't have IDs
+        }
+        
+        _uiState.value = _uiState.value.copy(selectedItems = allItemIds.toSet())
+    }
+
+    /**
+     * Clear selection
+     */
+    fun clearSelection() {
+        _uiState.value = _uiState.value.copyWithSelection(false)
+    }
+
+    // ====================================================================================
+    // FAVORITES MANAGEMENT
+    // ====================================================================================
+
+    /**
+     * Toggle favorite status for song
+     */
+    fun toggleFavorite(song: Song) {
+        viewModelScope.launch {
+            try {
+                val isFavorite = _uiState.value.isSongFavorite(song)
+                
+                if (isFavorite) {
+                    removeFromFavoritesUseCase.execute(song.id).fold(
+                        onSuccess = {
+                            // Favorites will be updated via observeFavorites()
+                        },
+                        onFailure = { error ->
+                            _uiState.value = _uiState.value.copyWithError("Failed to remove from favorites: ${error.message}")
+                        }
+                    )
+                } else {
+                    addToFavoritesUseCase.execute(song.id).fold(
+                        onSuccess = {
+                            // Favorites will be updated via observeFavorites()
+                        },
+                        onFailure = { error ->
+                            _uiState.value = _uiState.value.copyWithError("Failed to add to favorites: ${error.message}")
+                        }
+                    )
+                }
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copyWithError("Unexpected error: ${e.message}")
+            }
+        }
+    }
+
+    /**
+     * Add selected songs to favorites
+     */
+    fun addSelectedToFavorites() {
+        if (_uiState.value.selectedTab != LibraryTab.SONGS) return
+        
+        viewModelScope.launch {
+            try {
+                val selectedSongIds = _uiState.value.selectedItems.toList()
+                
+                selectedSongIds.forEach { songId ->
+                    addToFavoritesUseCase.execute(songId)
+                }
+                
+                clearSelection()
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copyWithError("Failed to add to favorites: ${e.message}")
+            }
+        }
+    }
+
+    /**
+     * Remove selected songs from favorites
+     */
+    fun removeSelectedFromFavorites() {
+        if (_uiState.value.selectedTab != LibraryTab.SONGS) return
+        
+        viewModelScope.launch {
+            try {
+                val selectedSongIds = _uiState.value.selectedItems.toList()
+                
+                selectedSongIds.forEach { songId ->
+                    removeFromFavoritesUseCase.execute(songId)
+                }
+                
+                clearSelection()
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copyWithError("Failed to remove from favorites: ${e.message}")
+            }
+        }
+    }
+
+    // ====================================================================================
+    // LIBRARY SCANNING
+    // ====================================================================================
+
+    /**
+     * Scan media library
+     */
+    fun scanLibrary() {
+        viewModelScope.launch {
+            try {
+                _uiState.value = _uiState.value.copy(
+                    isScanningLibrary = true,
+                    scanProgress = 0f,
+                    scanStatusMessage = "Starting scan..."
+                )
+                
+                scanMediaLibraryUseCase.scanMediaLibrary().fold(
+                    onSuccess = { result ->
+                        _uiState.value = _uiState.value.copy(
+                            isScanningLibrary = false,
+                            scanProgress = 1f,
+                            scanStatusMessage = "Scan completed",
+                            lastScanTime = System.currentTimeMillis()
+                        )
+                        
+                        // Reload data after scan
+                        loadAllData()
+                    },
+                    onFailure = { error ->
+                        _uiState.value = _uiState.value.copy(
+                            isScanningLibrary = false,
+                            scanProgress = 0f,
+                            scanStatusMessage = "Scan failed"
+                        )
+                        _uiState.value = _uiState.value.copyWithError("Failed to scan library: ${error.message}")
+                    }
+                )
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(
+                    isScanningLibrary = false,
+                    scanProgress = 0f,
+                    scanStatusMessage = "Scan failed"
+                )
+                _uiState.value = _uiState.value.copyWithError("Unexpected error during scan: ${e.message}")
+            }
+        }
+    }
+
+    // ====================================================================================
+    // NAVIGATION ACTIONS
+    // ====================================================================================
+
+    /**
+     * Play song
+     */
+    fun playSong(song: Song) {
+        _uiState.value = _uiState.value.copy(selectedSongForPlayback = song)
+    }
+
+    /**
+     * Navigate to album
+     */
+    fun navigateToAlbum(album: Album) {
+        _uiState.value = _uiState.value.copy(selectedAlbumForNavigation = album)
+    }
+
+    /**
+     * Navigate to artist
+     */
+    fun navigateToArtist(artist: Artist) {
+        _uiState.value = _uiState.value.copy(selectedArtistForNavigation = artist)
+    }
+
+    /**
+     * Clear navigation selections
+     */
+    fun clearNavigationSelections() {
+        _uiState.value = _uiState.value.copy(
+            selectedSongForPlayback = null,
+            selectedAlbumForNavigation = null,
+            selectedArtistForNavigation = null
+        )
+    }
+
+    // ====================================================================================
+    // REFRESH AND ERROR HANDLING
+    // ====================================================================================
+
+    /**
+     * Refresh current tab data
+     */
+    fun refreshCurrentTab() {
+        refreshJob?.cancel()
+        refreshJob = viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isRefreshing = true)
+            
+            try {
+                when (_uiState.value.selectedTab) {
+                    LibraryTab.SONGS -> loadSongs()
+                    LibraryTab.ALBUMS -> loadAlbums()
+                    LibraryTab.ARTISTS -> loadArtists()
+                    LibraryTab.PLAYLISTS -> loadPlaylists()
+                    LibraryTab.GENRES -> loadGenres()
+                }
+                
+                loadLibraryStats()
+                
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copyWithError("Failed to refresh: ${e.message}")
+            } finally {
+                _uiState.value = _uiState.value.copy(isRefreshing = false)
+            }
+        }
+    }
+
+    /**
+     * Refresh all data
+     */
+    fun refreshAll() {
+        refreshJob?.cancel()
+        refreshJob = viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isRefreshing = true)
+            
+            try {
+                loadAllData()
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copyWithError("Failed to refresh library: ${e.message}")
+            } finally {
+                _uiState.value = _uiState.value.copy(isRefreshing = false)
+            }
+        }
+    }
+
+    /**
+     * Clear error state
+     */
+    fun clearError() {
+        _uiState.value = _uiState.value.copy(error = null)
+    }
+
+    // ====================================================================================
+    // BATCH OPERATIONS
+    // ====================================================================================
+
+    /**
+     * Delete selected songs
+     */
+    fun deleteSelectedSongs() {
+        if (_uiState.value.selectedTab != LibraryTab.SONGS) return
+        
+        viewModelScope.launch {
+            try {
+                val selectedSongs = _uiState.value.selectedItems.mapNotNull { songId ->
+                    _uiState.value.songs.find { it.id == songId }
+                }
+                
+                musicRepository.deleteSongs(selectedSongs)
+                
+                // Reload songs after deletion
+                loadSongs()
+                clearSelection()
+                
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copyWithError("Failed to delete songs: ${e.message}")
+            }
+        }
+    }
+
+    /**
+     * Add selected songs to playlist
+     */
+    fun addSelectedToPlaylist(playlistId: Long) {
+        if (_uiState.value.selectedTab != LibraryTab.SONGS) return
+        
+        viewModelScope.launch {
+            try {
+                val selectedSongIds = _uiState.value.selectedItems.toList()
+                
+                selectedSongIds.forEach { songId ->
+                    playlistRepository.addSongToPlaylist(playlistId, songId)
+                }
+                
+                clearSelection()
+                
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copyWithError("Failed to add to playlist: ${e.message}")
+            }
+        }
+    }
+
+    // ====================================================================================
+    // PRIVATE HELPER METHODS
+    // ====================================================================================
+
+    private fun observeSettings() {
+        viewModelScope.launch {
+            getAppSettingsUseCase.getAppSettings()
+                .catch { e ->
+                    _uiState.value = _uiState.value.copyWithError("Failed to load settings: ${e.message}")
+                }
+                .collect { settings ->
+                    _uiState.value = _uiState.value.copy(
+                        sortOrder = settings.sortOrder,
+                        gridSize = settings.gridSize
+                    )
+                }
+        }
+    }
+
+    private fun observeFavorites() {
+        viewModelScope.launch {
+            getFavoritesUseCase.getFavoriteSongs()
+                .catch { e ->
+                    _uiState.value = _uiState.value.copyWithError("Failed to load favorites: ${e.message}")
+                }
+                .collect { favorites ->
+                    val favoriteIds = favorites.map { it.id }.toSet()
+                    _uiState.value = _uiState.value.copy(favoriteSongs = favoriteIds)
+                    
+                    // Update stats
+                    val currentStats = _uiState.value.libraryStats
+                    _uiState.value = _uiState.value.copy(
+                        libraryStats = currentStats.copy(favoritesCount = favoriteIds.size)
+                    )
+                }
+        }
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        searchJob?.cancel()
+        refreshJob?.cancel()
+    }
+
+    // ====================================================================================
+    // PUBLIC HELPER METHODS
+    // ====================================================================================
+
+    /**
+     * Get songs by album
+     */
+    fun getSongsByAlbum(albumName: String): List<Song> {
+        return _uiState.value.songs.filter { it.album == albumName }
+    }
+
+    /**
+     * Get songs by artist
+     */
+    fun getSongsByArtist(artistName: String): List<Song> {
+        return _uiState.value.songs.filter { it.artist == artistName }
+    }
+
+    /**
+     * Get songs by genre
+     */
+    fun getSongsByGenre(genre: String): List<Song> {
+        return _uiState.value.songs.filter { it.genre == genre }
+    }
+
+    /**
+     * Get current tab data count
+     */
+    fun getCurrentTabDataCount(): Int {
+        return _uiState.value.currentTabItemCount
+    }
+
+    /**
+     * Check if can perform batch operations
+     */
+    fun canPerformBatchOperations(): Boolean {
+        return _uiState.value.hasSelectedItems && _uiState.value.selectedTab == LibraryTab.SONGS
+    }
 }

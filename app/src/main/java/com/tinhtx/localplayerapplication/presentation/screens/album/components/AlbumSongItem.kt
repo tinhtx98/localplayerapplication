@@ -1,42 +1,56 @@
 package com.tinhtx.localplayerapplication.presentation.screens.album.components
 
-import androidx.compose.animation.*
-import androidx.compose.foundation.background
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.tinhtx.localplayerapplication.domain.model.Song
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun AlbumSongItem(
     song: Song,
     trackNumber: Int,
+    isSelected: Boolean,
+    isFavorite: Boolean,
+    isCurrentlyPlaying: Boolean,
+    isPlaying: Boolean,
+    isSelectionMode: Boolean,
     onClick: () -> Unit,
-    onFavoriteClick: () -> Unit,
-    onAddToPlaylistClick: () -> Unit,
-    modifier: Modifier = Modifier,
-    isPlaying: Boolean = false
+    onLongClick: () -> Unit,
+    onToggleSelection: () -> Unit,
+    onToggleFavorite: () -> Unit,
+    onMoreClick: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
     Card(
-        onClick = onClick,
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier
+            .fillMaxWidth()
+            .combinedClickable(
+                onClick = if (isSelectionMode) onToggleSelection else onClick,
+                onLongClick = onLongClick
+            ),
         colors = CardDefaults.cardColors(
-            containerColor = if (isPlaying) {
-                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
-            } else {
-                MaterialTheme.colorScheme.surface
+            containerColor = when {
+                isSelected -> MaterialTheme.colorScheme.primaryContainer
+                isCurrentlyPlaying -> MaterialTheme.colorScheme.secondaryContainer
+                else -> MaterialTheme.colorScheme.surface
             }
         ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        elevation = CardDefaults.cardElevation(
+            defaultElevation = when {
+                isSelected || isCurrentlyPlaying -> 4.dp
+                else -> 1.dp
+            }
+        )
     ) {
         Row(
             modifier = Modifier
@@ -44,125 +58,140 @@ fun AlbumSongItem(
                 .padding(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Track number or play indicator
+            // Track number, selection checkbox, or playing indicator
             Box(
-                modifier = Modifier
-                    .size(32.dp)
-                    .background(
-                        if (isPlaying) MaterialTheme.colorScheme.primary else Color.Transparent,
-                        CircleShape
-                    ),
+                modifier = Modifier.size(32.dp),
                 contentAlignment = Alignment.Center
             ) {
-                if (isPlaying) {
-                    Icon(
-                        imageVector = Icons.Default.PlayArrow,
-                        contentDescription = "Now playing",
-                        modifier = Modifier.size(16.dp),
-                        tint = MaterialTheme.colorScheme.onPrimary
-                    )
-                } else {
-                    Text(
-                        text = trackNumber.toString(),
-                        style = MaterialTheme.typography.labelMedium,
-                        fontWeight = FontWeight.Medium,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                    )
+                when {
+                    isSelectionMode -> {
+                        Checkbox(
+                            checked = isSelected,
+                            onCheckedChange = { onToggleSelection() },
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                    isCurrentlyPlaying -> {
+                        Icon(
+                            imageVector = if (isPlaying) Icons.Default.Equalizer else Icons.Default.Pause,
+                            contentDescription = if (isPlaying) "Playing" else "Paused",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                    else -> {
+                        Text(
+                            text = trackNumber.toString(),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
             }
 
-            Spacer(modifier = Modifier.width(16.dp))
+            Spacer(modifier = Modifier.width(12.dp))
 
-            // Song information
+            // Song info
             Column(
                 modifier = Modifier.weight(1f)
             ) {
                 Text(
                     text = song.title,
                     style = MaterialTheme.typography.titleSmall,
-                    color = if (isPlaying) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
-                    fontWeight = if (isPlaying) FontWeight.Bold else FontWeight.Normal,
+                    fontWeight = if (isCurrentlyPlaying) FontWeight.SemiBold else FontWeight.Medium,
                     maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                    overflow = TextOverflow.Ellipsis,
+                    color = if (isCurrentlyPlaying) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
                 )
 
                 Spacer(modifier = Modifier.height(2.dp))
 
-                // Additional song info (if different from album artist)
-                if (song.displayArtist.isNotBlank()) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                     Text(
-                        text = song.displayArtist,
+                        text = formatDuration(song.duration),
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                }
-            }
 
-            // Track features (if any)
-            if (song.genre?.isNotBlank() == true) {
-                Surface(
-                    color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.3f),
-                    shape = androidx.compose.foundation.shape.RoundedCornerShape(4.dp)
-                ) {
-                    Text(
-                        text = song.genre!!,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.secondary,
-                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                    )
-                }
-                Spacer(modifier = Modifier.width(8.dp))
-            }
+                    if (song.playCount > 0) {
+                        Text(
+                            text = "•",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                        )
 
-            // Duration
-            Text(
-                text = song.formattedDuration,
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-            )
-
-            Spacer(modifier = Modifier.width(8.dp))
-
-            // Action buttons
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                // Favorite button
-                IconButton(
-                    onClick = onFavoriteClick,
-                    modifier = Modifier.size(32.dp)
-                ) {
-                    AnimatedContent(
-                        targetState = song.isFavorite,
-                        transitionSpec = {
-                            scaleIn() + fadeIn() with scaleOut() + fadeOut()
-                        },
-                        label = "favorite_animation"
-                    ) { isFavorite ->
-                        Icon(
-                            imageVector = if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                            contentDescription = if (isFavorite) "Remove from favorites" else "Add to favorites",
-                            modifier = Modifier.size(18.dp),
-                            tint = if (isFavorite) Color.Red else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                        Text(
+                            text = "${song.playCount} plays",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
                         )
                     }
+
+                    if (song.rating > 0f) {
+                        Text(
+                            text = "•",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                        )
+
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Star,
+                                contentDescription = null,
+                                modifier = Modifier.size(12.dp),
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                            Spacer(modifier = Modifier.width(2.dp))
+                            Text(
+                                text = String.format("%.1f", song.rating),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
+                            )
+                        }
+                    }
+                }
+            }
+
+            // Action buttons
+            Row {
+                // Favorite button
+                IconButton(
+                    onClick = onToggleFavorite,
+                    modifier = Modifier.size(32.dp)
+                ) {
+                    Icon(
+                        imageVector = if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                        contentDescription = if (isFavorite) "Remove from favorites" else "Add to favorites",
+                        tint = if (isFavorite) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(16.dp)
+                    )
                 }
 
                 // More options button
                 IconButton(
-                    onClick = onAddToPlaylistClick,
+                    onClick = onMoreClick,
                     modifier = Modifier.size(32.dp)
                 ) {
                     Icon(
                         imageVector = Icons.Default.MoreVert,
                         contentDescription = "More options",
-                        modifier = Modifier.size(18.dp),
-                        tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(16.dp)
                     )
                 }
             }
         }
     }
+}
+
+private fun formatDuration(durationMs: Long): String {
+    val totalSeconds = durationMs / 1000
+    val minutes = totalSeconds / 60
+    val seconds = totalSeconds % 60
+    return String.format("%d:%02d", minutes, seconds)
 }

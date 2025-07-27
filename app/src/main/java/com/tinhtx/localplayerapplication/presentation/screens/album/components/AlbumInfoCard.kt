@@ -1,119 +1,155 @@
 package com.tinhtx.localplayerapplication.presentation.screens.album.components
 
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.tinhtx.localplayerapplication.domain.model.Album
+import com.tinhtx.localplayerapplication.presentation.screens.album.AlbumStatistics
 
 @Composable
 fun AlbumInfoCard(
-    album: Album,
+    albumStats: AlbumStatistics,
+    isPlaying: Boolean,
+    shuffleMode: Boolean,
+    onPlayAlbum: () -> Unit,
+    onShufflePlay: () -> Unit,
+    onToggleSelectionMode: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Card(
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier,
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.5f)
+            containerColor = MaterialTheme.colorScheme.surfaceVariant
         ),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Column(
-            modifier = Modifier.padding(20.dp)
+            modifier = Modifier.padding(16.dp)
         ) {
-            Text(
-                text = "Album Information",
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-            
-            Spacer(modifier = Modifier.height(16.dp))
-            
-            // Album details
-            AlbumInfoRow(
-                icon = Icons.Default.Album,
-                label = "Album",
-                value = album.displayName
-            )
-            
-            AlbumInfoRow(
-                icon = Icons.Default.Person,
-                label = "Artist",
-                value = album.displayArtist
-            )
-            
-            if (album.year > 0) {
-                AlbumInfoRow(
-                    icon = Icons.Default.CalendarMonth,
-                    label = "Year",
-                    value = album.year.toString()
+            // Statistics row
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceEvenly
+            ) {
+                AlbumStatItem(
+                    title = "Songs",
+                    value = albumStats.totalSongs.toString(),
+                    icon = Icons.Default.MusicNote
                 )
+
+                AlbumStatItem(
+                    title = "Duration",
+                    value = albumStats.formattedTotalDuration,
+                    icon = Icons.Default.Schedule
+                )
+
+                AlbumStatItem(
+                    title = "Plays",
+                    value = albumStats.totalPlays.toString(),
+                    icon = Icons.Default.PlayArrow
+                )
+
+                if (albumStats.albumRating > 0f) {
+                    AlbumStatItem(
+                        title = "Rating",
+                        value = String.format("%.1f", albumStats.albumRating),
+                        icon = Icons.Default.Star
+                    )
+                }
             }
-            
-            AlbumInfoRow(
-                icon = Icons.Default.MusicNote,
-                label = "Tracks",
-                value = "${album.songCount} ${if (album.songCount == 1) "song" else "songs"}"
-            )
-            
-            // Additional metadata if available
-            if (album.genre?.isNotBlank() == true) {
-                AlbumInfoRow(
-                    icon = Icons.Default.Category,
-                    label = "Genre",
-                    value = album.genre!!
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Action buttons
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                // Play button
+                Button(
+                    onClick = onPlayAlbum,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Icon(
+                        imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                        contentDescription = if (isPlaying) "Pause" else "Play",
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(if (isPlaying) "Pause" else "Play")
+                }
+
+                // Shuffle button
+                OutlinedButton(
+                    onClick = onShufflePlay,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Shuffle,
+                        contentDescription = "Shuffle",
+                        modifier = Modifier.size(18.dp),
+                        tint = if (shuffleMode) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Shuffle")
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Select button
+            OutlinedButton(
+                onClick = onToggleSelectionMode,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Icon(
+                    imageVector = Icons.Default.CheckCircle,
+                    contentDescription = "Select songs",
+                    modifier = Modifier.size(18.dp)
                 )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Select Songs")
             }
         }
     }
 }
 
 @Composable
-private fun AlbumInfoRow(
-    icon: ImageVector,
-    label: String,
+private fun AlbumStatItem(
+    title: String,
     value: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
     modifier: Modifier = Modifier
 ) {
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(vertical = 6.dp),
-        verticalAlignment = Alignment.CenterVertically
+    Column(
+        modifier = modifier,
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Surface(
-            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
-            shape = RoundedCornerShape(6.dp)
-        ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                modifier = Modifier
-                    .size(32.dp)
-                    .padding(6.dp),
-                tint = MaterialTheme.colorScheme.primary
-            )
-        }
-        
-        Spacer(modifier = Modifier.width(12.dp))
-        
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = label,
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
-            )
-            Text(
-                text = value,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-        }
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            modifier = Modifier.size(20.dp),
+            tint = MaterialTheme.colorScheme.primary
+        )
+
+        Spacer(modifier = Modifier.height(4.dp))
+
+        Text(
+            text = value,
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+
+        Text(
+            text = title,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
+        )
     }
 }

@@ -1,340 +1,411 @@
 package com.tinhtx.localplayerapplication.presentation.components.ui
 
 import androidx.compose.animation.*
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.tinhtx.localplayerapplication.presentation.navigation.BottomNavItem
-import com.tinhtx.localplayerapplication.presentation.navigation.LocalPlayerNavigationBarItem
-import com.tinhtx.localplayerapplication.presentation.navigation.TopLevelDestination
 
 @Composable
-fun MusicBottomNavigationBar(
-    destinations: List<TopLevelDestination>,
-    currentDestination: String?,
-    onNavigateToDestination: (TopLevelDestination) -> Unit,
+fun BottomNavigationBar(
+    items: List<BottomNavItem>,
+    selectedItem: String,
+    onItemClick: (String) -> Unit,
     modifier: Modifier = Modifier,
-    containerColor: Color = MaterialTheme.colorScheme.surface,
+    style: BottomNavStyle = BottomNavStyle.Default,
+    showLabels: Boolean = true,
+    backgroundColor: Color = MaterialTheme.colorScheme.surface,
     contentColor: Color = MaterialTheme.colorScheme.onSurface,
-    tonalElevation: androidx.compose.ui.unit.Dp = 3.dp
+    selectedColor: Color = MaterialTheme.colorScheme.primary,
+    hasNotification: Map<String, Boolean> = emptyMap()
+) {
+    when (style) {
+        BottomNavStyle.Default -> DefaultBottomNav(
+            items = items,
+            selectedItem = selectedItem,
+            onItemClick = onItemClick,
+            showLabels = showLabels,
+            backgroundColor = backgroundColor,
+            contentColor = contentColor,
+            selectedColor = selectedColor,
+            hasNotification = hasNotification,
+            modifier = modifier
+        )
+        BottomNavStyle.Floating -> FloatingBottomNav(
+            items = items,
+            selectedItem = selectedItem,
+            onItemClick = onItemClick,
+            showLabels = showLabels,
+            backgroundColor = backgroundColor,
+            contentColor = contentColor,
+            selectedColor = selectedColor,
+            hasNotification = hasNotification,
+            modifier = modifier
+        )
+        BottomNavStyle.Pills -> PillsBottomNav(
+            items = items,
+            selectedItem = selectedItem,
+            onItemClick = onItemClick,
+            showLabels = showLabels,
+            backgroundColor = backgroundColor,
+            contentColor = contentColor,
+            selectedColor = selectedColor,
+            hasNotification = hasNotification,
+            modifier = modifier
+        )
+    }
+}
+
+@Composable
+private fun DefaultBottomNav(
+    items: List<BottomNavItem>,
+    selectedItem: String,
+    onItemClick: (String) -> Unit,
+    showLabels: Boolean,
+    backgroundColor: Color,
+    contentColor: Color,
+    selectedColor: Color,
+    hasNotification: Map<String, Boolean>,
+    modifier: Modifier
 ) {
     NavigationBar(
         modifier = modifier,
-        containerColor = containerColor,
-        contentColor = contentColor,
-        tonalElevation = tonalElevation
+        containerColor = backgroundColor,
+        contentColor = contentColor
     ) {
-        destinations.forEach { destination ->
-            val selected = currentDestination == destination.route
+        items.forEach { item ->
+            val isSelected = selectedItem == item.route
+            val hasNotif = hasNotification[item.route] == true
             
-            LocalPlayerNavigationBarItem(
-                selected = selected,
-                onClick = { onNavigateToDestination(destination) },
-                destination = destination
+            NavigationBarItem(
+                selected = isSelected,
+                onClick = { onItemClick(item.route) },
+                icon = {
+                    BottomNavIcon(
+                        icon = if (isSelected) item.selectedIcon else item.unselectedIcon,
+                        hasNotification = hasNotif,
+                        isSelected = isSelected,
+                        selectedColor = selectedColor
+                    )
+                },
+                label = if (showLabels) {
+                    {
+                        Text(
+                            text = item.label,
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal
+                        )
+                    }
+                } else null,
+                colors = NavigationBarItemDefaults.colors(
+                    selectedIconColor = selectedColor,
+                    selectedTextColor = selectedColor,
+                    unselectedIconColor = contentColor.copy(alpha = 0.7f),
+                    unselectedTextColor = contentColor.copy(alpha = 0.7f),
+                    indicatorColor = selectedColor.copy(alpha = 0.12f)
+                )
             )
         }
     }
 }
 
 @Composable
-fun FloatingBottomNavigationBar(
-    destinations: List<TopLevelDestination>,
-    currentDestination: String?,
-    onNavigateToDestination: (TopLevelDestination) -> Unit,
-    modifier: Modifier = Modifier,
-    showLabels: Boolean = true
+private fun FloatingBottomNav(
+    items: List<BottomNavItem>,
+    selectedItem: String,
+    onItemClick: (String) -> Unit,
+    showLabels: Boolean,
+    backgroundColor: Color,
+    contentColor: Color,
+    selectedColor: Color,
+    hasNotification: Map<String, Boolean>,
+    modifier: Modifier
 ) {
-    Card(
+    Surface(
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 8.dp),
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainer
-        ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+        shape = RoundedCornerShape(28.dp),
+        color = backgroundColor,
+        shadowElevation = 8.dp,
+        tonalElevation = 3.dp
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 8.dp),
+                .padding(vertical = 8.dp)
+                .selectableGroup(),
             horizontalArrangement = Arrangement.SpaceEvenly,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            destinations.forEach { destination ->
-                val selected = currentDestination == destination.route
+            items.forEach { item ->
+                val isSelected = selectedItem == item.route
+                val hasNotif = hasNotification[item.route] == true
                 
                 FloatingNavItem(
-                    selected = selected,
-                    onClick = { onNavigateToDestination(destination) },
-                    icon = if (selected) destination.selectedIcon else destination.unselectedIcon,
-                    label = if (showLabels) stringResource(destination.titleResId) else null,
+                    item = item,
+                    isSelected = isSelected,
+                    hasNotification = hasNotif,
+                    showLabel = showLabels,
+                    onClick = { onItemClick(item.route) },
+                    selectedColor = selectedColor,
+                    contentColor = contentColor
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun PillsBottomNav(
+    items: List<BottomNavItem>,
+    selectedItem: String,
+    onItemClick: (String) -> Unit,
+    showLabels: Boolean,
+    backgroundColor: Color,
+    contentColor: Color,
+    selectedColor: Color,
+    hasNotification: Map<String, Boolean>,
+    modifier: Modifier
+) {
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        color = backgroundColor
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 12.dp)
+                .selectableGroup(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            items.forEach { item ->
+                val isSelected = selectedItem == item.route
+                val hasNotif = hasNotification[item.route] == true
+                
+                PillNavItem(
+                    item = item,
+                    isSelected = isSelected,
+                    hasNotification = hasNotif,
+                    showLabel = showLabels,
+                    onClick = { onItemClick(item.route) },
+                    selectedColor = selectedColor,
+                    contentColor = contentColor,
                     modifier = Modifier.weight(1f)
                 )
             }
+        }
+    }
+}
+
+@Composable
+private fun BottomNavIcon(
+    icon: ImageVector,
+    hasNotification: Boolean,
+    isSelected: Boolean,
+    selectedColor: Color,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier,
+        contentAlignment = Alignment.Center
+    ) {
+        AnimatedContent(
+            targetState = isSelected,
+            transitionSpec = {
+                scaleIn(animationSpec = tween(200)) + fadeIn() with 
+                scaleOut(animationSpec = tween(200)) + fadeOut()
+            }
+        ) { selected ->
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                modifier = Modifier.size(if (selected) 26.dp else 24.dp)
+            )
+        }
+        
+        // Notification badge
+        if (hasNotification) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .offset(x = 4.dp, y = (-4).dp)
+                    .size(8.dp)
+                    .background(MaterialTheme.colorScheme.error, CircleShape)
+            )
         }
     }
 }
 
 @Composable
 private fun FloatingNavItem(
-    selected: Boolean,
+    item: BottomNavItem,
+    isSelected: Boolean,
+    hasNotification: Boolean,
+    showLabel: Boolean,
     onClick: () -> Unit,
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    modifier: Modifier = Modifier,
-    label: String? = null
+    selectedColor: Color,
+    contentColor: Color
 ) {
-    Column(
-        modifier = modifier,
-        horizontalAlignment = Alignment.CenterHorizontally
+    val haptic = LocalHapticFeedback.current
+    val interactionSource = remember { MutableInteractionSource() }
+    
+    Surface(
+        onClick = {
+            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+            onClick()
+        },
+        modifier = Modifier.clip(RoundedCornerShape(20.dp)),
+        color = if (isSelected) selectedColor.copy(alpha = 0.12f) else Color.Transparent,
+        interactionSource = interactionSource
     ) {
-        IconButton(
-            onClick = onClick,
-            modifier = Modifier
-                .background(
-                    color = if (selected) {
-                        MaterialTheme.colorScheme.primaryContainer
-                    } else {
-                        Color.Transparent
-                    },
-                    shape = CircleShape
-                )
+        Column(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            AnimatedContent(
-                targetState = selected,
-                transitionSpec = {
-                    scaleIn(initialScale = 0.8f) + fadeIn() with 
-                    scaleOut(targetScale = 0.8f) + fadeOut()
-                },
-                label = "nav_icon"
-            ) { isSelected ->
-                Icon(
-                    imageVector = icon,
-                    contentDescription = label,
-                    tint = if (isSelected) {
-                        MaterialTheme.colorScheme.primary
-                    } else {
-                        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                    }
-                )
-            }
-        }
-        
-        if (label != null) {
-            AnimatedVisibility(
-                visible = selected,
-                enter = fadeIn() + slideInVertically(initialOffsetY = { it / 2 }),
-                exit = fadeOut() + slideOutVertically(targetOffsetY = { it / 2 })
-            ) {
-                Text(
-                    text = label,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.primary
-                )
-            }
-        }
-    }
-}
-
-@Composable
-fun MinimalBottomNavigationBar(
-    destinations: List<TopLevelDestination>,
-    currentDestination: String?,
-    onNavigateToDestination: (TopLevelDestination) -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .background(MaterialTheme.colorScheme.surface)
-            .padding(horizontal = 32.dp, vertical = 16.dp),
-        horizontalArrangement = Arrangement.SpaceEvenly,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        destinations.forEach { destination ->
-            val selected = currentDestination == destination.route
-            
-            IconButton(
-                onClick = { onNavigateToDestination(destination) },
-                modifier = Modifier.size(40.dp)
-            ) {
-                Icon(
-                    imageVector = if (selected) destination.selectedIcon else destination.unselectedIcon,
-                    contentDescription = stringResource(destination.titleResId),
-                    tint = if (selected) {
-                        MaterialTheme.colorScheme.primary
-                    } else {
-                        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-                    }
-                )
-            }
-        }
-    }
-}
-
-@Composable
-fun AnimatedBottomNavigationBar(
-    destinations: List<TopLevelDestination>,
-    currentDestination: String?,
-    onNavigateToDestination: (TopLevelDestination) -> Unit,
-    modifier: Modifier = Modifier,
-    animationDuration: Int = 300
-) {
-    NavigationBar(
-        modifier = modifier,
-        containerColor = MaterialTheme.colorScheme.surface,
-        tonalElevation = 3.dp
-    ) {
-        destinations.forEach { destination ->
-            val selected = currentDestination == destination.route
-            
-            NavigationBarItem(
-                icon = {
-                    AnimatedContent(
-                        targetState = selected,
-                        transitionSpec = {
-                            (scaleIn(
-                                initialScale = 0.8f,
-                                animationSpec = tween(animationDuration)
-                            ) + fadeIn(animationSpec = tween(animationDuration))) with
-                            (scaleOut(
-                                targetScale = 0.8f,
-                                animationSpec = tween(animationDuration)
-                            ) + fadeOut(animationSpec = tween(animationDuration)))
-                        },
-                        label = "nav_bar_icon"
-                    ) { isSelected ->
-                        Icon(
-                            imageVector = if (isSelected) destination.selectedIcon else destination.unselectedIcon,
-                            contentDescription = null
-                        )
-                    }
-                },
-                label = {
-                    AnimatedContent(
-                        targetState = stringResource(destination.titleResId),
-                        transitionSpec = {
-                            fadeIn(animationSpec = tween(animationDuration)) with
-                            fadeOut(animationSpec = tween(animationDuration))
-                        },
-                        label = "nav_bar_label"
-                    ) { text ->
-                        Text(
-                            text = text,
-                            style = MaterialTheme.typography.labelMedium
-                        )
-                    }
-                },
-                selected = selected,
-                onClick = { onNavigateToDestination(destination) },
-                colors = NavigationBarItemDefaults.colors(
-                    selectedIconColor = MaterialTheme.colorScheme.primary,
-                    selectedTextColor = MaterialTheme.colorScheme.primary,
-                    unselectedIconColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-                    unselectedTextColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-                    indicatorColor = MaterialTheme.colorScheme.primaryContainer
-                )
+            BottomNavIcon(
+                icon = if (isSelected) item.selectedIcon else item.unselectedIcon,
+                hasNotification = hasNotification,
+                isSelected = isSelected,
+                selectedColor = selectedColor
             )
-        }
-    }
-}
-
-@Composable
-fun TabBarBottomNavigation(
-    destinations: List<TopLevelDestination>,
-    currentDestination: String?,
-    onNavigateToDestination: (TopLevelDestination) -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Card(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(16.dp),
-        shape = RoundedCornerShape(28.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
-        ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 6.dp)
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(4.dp),
-            horizontalArrangement = Arrangement.SpaceEvenly
-        ) {
-            destinations.forEach { destination ->
-                val selected = currentDestination == destination.route
-                
-                TabBarItem(
-                    selected = selected,
-                    onClick = { onNavigateToDestination(destination) },
-                    icon = if (selected) destination.selectedIcon else destination.unselectedIcon,
-                    label = stringResource(destination.titleResId),
-                    modifier = Modifier.weight(1f)
-                )
+            
+            if (showLabel) {
+                AnimatedVisibility(
+                    visible = isSelected,
+                    enter = slideInVertically(initialOffsetY = { it / 2 }) + fadeIn(),
+                    exit = slideOutVertically(targetOffsetY = { it / 2 }) + fadeOut()
+                ) {
+                    Text(
+                        text = item.label,
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = selectedColor,
+                        modifier = Modifier.padding(top = 4.dp)
+                    )
+                }
             }
         }
     }
 }
 
 @Composable
-private fun TabBarItem(
-    selected: Boolean,
+private fun PillNavItem(
+    item: BottomNavItem,
+    isSelected: Boolean,
+    hasNotification: Boolean,
+    showLabel: Boolean,
     onClick: () -> Unit,
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    label: String,
+    selectedColor: Color,
+    contentColor: Color,
     modifier: Modifier = Modifier
 ) {
-    Button(
-        onClick = onClick,
-        modifier = modifier
-            .padding(2.dp)
-            .height(48.dp),
-        colors = ButtonDefaults.buttonColors(
-            containerColor = if (selected) {
-                MaterialTheme.colorScheme.primary
-            } else {
-                Color.Transparent
-            },
-            contentColor = if (selected) {
-                MaterialTheme.colorScheme.onPrimary
-            } else {
-                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-            }
-        ),
-        shape = RoundedCornerShape(20.dp),
-        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
+    val haptic = LocalHapticFeedback.current
+    
+    Surface(
+        onClick = {
+            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+            onClick()
+        },
+        modifier = modifier,
+        shape = RoundedCornerShape(24.dp),
+        color = if (isSelected) selectedColor else contentColor.copy(alpha = 0.1f)
     ) {
         Row(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            horizontalArrangement = Arrangement.Center
         ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                modifier = Modifier.size(20.dp)
+            BottomNavIcon(
+                icon = if (isSelected) item.selectedIcon else item.unselectedIcon,
+                hasNotification = hasNotification,
+                isSelected = isSelected,
+                selectedColor = if (isSelected) MaterialTheme.colorScheme.onPrimary else contentColor
             )
             
             AnimatedVisibility(
-                visible = selected,
-                enter = slideInHorizontally() + fadeIn(),
-                exit = slideOutHorizontally() + fadeOut()
+                visible = isSelected && showLabel,
+                enter = slideInHorizontally(initialOffsetX = { -it / 2 }) + 
+                        expandHorizontally() + fadeIn(),
+                exit = slideOutHorizontally(targetOffsetX = { -it / 2 }) + 
+                       shrinkHorizontally() + fadeOut()
             ) {
                 Text(
-                    text = label,
+                    text = item.label,
                     style = MaterialTheme.typography.labelMedium,
-                    maxLines = 1
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onPrimary,
+                    modifier = Modifier.padding(start = 8.dp)
                 )
             }
         }
     }
+}
+
+@Composable
+fun AdaptiveBottomNavigation(
+    items: List<BottomNavItem>,
+    selectedItem: String,
+    onItemClick: (String) -> Unit,
+    modifier: Modifier = Modifier,
+    hasNotification: Map<String, Boolean> = emptyMap()
+) {
+    val responsiveInfo = com.tinhtx.localplayerapplication.presentation.components.common.rememberResponsiveInfo()
+    
+    when (responsiveInfo.screenSize) {
+        com.tinhtx.localplayerapplication.presentation.components.common.ScreenSize.Compact -> {
+            BottomNavigationBar(
+                items = items,
+                selectedItem = selectedItem,
+                onItemClick = onItemClick,
+                style = BottomNavStyle.Default,
+                hasNotification = hasNotification,
+                modifier = modifier
+            )
+        }
+        com.tinhtx.localplayerapplication.presentation.components.common.ScreenSize.Medium -> {
+            BottomNavigationBar(
+                items = items,
+                selectedItem = selectedItem,
+                onItemClick = onItemClick,
+                style = BottomNavStyle.Floating,
+                hasNotification = hasNotification,
+                modifier = modifier
+            )
+        }
+        else -> {
+            BottomNavigationBar(
+                items = items,
+                selectedItem = selectedItem,
+                onItemClick = onItemClick,
+                style = BottomNavStyle.Pills,
+                hasNotification = hasNotification,
+                modifier = modifier
+            )
+        }
+    }
+}
+
+enum class BottomNavStyle {
+    Default,
+    Floating,
+    Pills
 }

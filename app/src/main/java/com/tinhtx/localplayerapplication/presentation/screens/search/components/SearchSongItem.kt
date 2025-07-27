@@ -1,8 +1,9 @@
 package com.tinhtx.localplayerapplication.presentation.screens.search.components
 
-import androidx.compose.animation.*
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.RoundedCornerStyle
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -10,31 +11,49 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import com.tinhtx.localplayerapplication.domain.model.Song
-import com.tinhtx.localplayerapplication.presentation.components.image.AlbumArtImage
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun SearchSongItem(
     song: Song,
-    query: String,
+    isSelected: Boolean,
+    isFavorite: Boolean,
+    isCurrentlyPlaying: Boolean,
+    isPlaying: Boolean,
+    isSelectionMode: Boolean,
     onClick: () -> Unit,
-    onFavoriteClick: () -> Unit,
+    onLongClick: () -> Unit,
+    onToggleFavorite: () -> Unit,
     onMoreClick: () -> Unit,
+    searchQuery: String,
     modifier: Modifier = Modifier
 ) {
     Card(
-        onClick = onClick,
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier
+            .combinedClickable(
+                onClick = onClick,
+                onLongClick = onLongClick
+            ),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
+            containerColor = when {
+                isSelected -> MaterialTheme.colorScheme.primaryContainer
+                isCurrentlyPlaying -> MaterialTheme.colorScheme.secondaryContainer
+                else -> MaterialTheme.colorScheme.surface
+            }
         ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        elevation = CardDefaults.cardElevation(
+            defaultElevation = when {
+                isSelected || isCurrentlyPlaying -> 4.dp
+                else -> 1.dp
+            }
+        )
     ) {
         Row(
             modifier = Modifier
@@ -42,67 +61,166 @@ fun SearchSongItem(
                 .padding(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            AlbumArtImage(
-                albumId = song.albumId,
-                contentDescription = "Album art",
-                modifier = Modifier.size(48.dp)
-            )
-            
+            // Selection checkbox or playing indicator
+            Box(
+                modifier = Modifier.size(32.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                when {
+                    isSelectionMode -> {
+                        Checkbox(
+                            checked = isSelected,
+                            onCheckedChange = null, // Handled by parent onClick
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                    isCurrentlyPlaying -> {
+                        Icon(
+                            imageVector = if (isPlaying) Icons.Default.Equalizer else Icons.Default.Pause,
+                            contentDescription = if (isPlaying) "Playing" else "Paused",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                    else -> {
+                        Icon(
+                            imageVector = Icons.Default.MusicNote,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                }
+            }
+
             Spacer(modifier = Modifier.width(12.dp))
-            
+
+            // Song info with search highlighting
             Column(
                 modifier = Modifier.weight(1f)
             ) {
                 Text(
-                    text = highlightSearchQuery(song.title, query),
+                    text = highlightSearchTerm(song.title, searchQuery),
                     style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.onSurface,
+                    fontWeight = if (isCurrentlyPlaying) FontWeight.SemiBold else FontWeight.Medium,
                     maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                    overflow = TextOverflow.Ellipsis,
+                    color = if (isCurrentlyPlaying) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
                 )
-                
+
                 Spacer(modifier = Modifier.height(2.dp))
-                
-                Text(
-                    text = highlightSearchQuery("${song.displayArtist} • ${song.displayAlbum}", query),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
+
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = highlightSearchTerm(song.artist, searchQuery),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false)
+                    )
+
+                    Text(
+                        text = "•",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                    )
+
+                    Text(
+                        text = highlightSearchTerm(song.album, searchQuery),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false)
+                    )
+
+                    Text(
+                        text = "•",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                    )
+
+                    Text(
+                        text = formatDuration(song.duration),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
+                    )
+                }
+
+                // Additional info row
+                if (song.year > 0 || song.genre.isNotEmpty() || song.playCount > 0) {
+                    Spacer(modifier = Modifier.height(2.dp))
+                    
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        if (song.year > 0) {
+                            Text(
+                                text = song.year.toString(),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                            )
+                        }
+                        
+                        if (song.genre.isNotEmpty()) {
+                            if (song.year > 0) {
+                                Text("•", style = MaterialTheme.typography.labelSmall)
+                            }
+                            Text(
+                                text = highlightSearchTerm(song.genre, searchQuery),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                            )
+                        }
+                        
+                        if (song.playCount > 0) {
+                            if (song.year > 0 || song.genre.isNotEmpty()) {
+                                Text("•", style = MaterialTheme.typography.labelSmall)
+                            }
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.PlayArrow,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(10.dp),
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                                )
+                                Spacer(modifier = Modifier.width(2.dp))
+                                Text(
+                                    text = song.playCount.toString(),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                                )
+                            }
+                        }
+                    }
+                }
             }
-            
-            Text(
-                text = song.formattedDuration,
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-            )
-            
-            Spacer(modifier = Modifier.width(8.dp))
-            
+
+            // Action buttons
             Row(
                 horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
+                // Favorite button
                 IconButton(
-                    onClick = onFavoriteClick,
+                    onClick = onToggleFavorite,
                     modifier = Modifier.size(32.dp)
                 ) {
-                    AnimatedContent(
-                        targetState = song.isFavorite,
-                        transitionSpec = {
-                            scaleIn() + fadeIn() with scaleOut() + fadeOut()
-                        },
-                        label = "favorite_animation"
-                    ) { isFavorite ->
-                        Icon(
-                            imageVector = if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                            contentDescription = "Toggle favorite",
-                            modifier = Modifier.size(18.dp),
-                            tint = if (isFavorite) Color.Red else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                        )
-                    }
+                    Icon(
+                        imageVector = if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                        contentDescription = if (isFavorite) "Remove from favorites" else "Add to favorites",
+                        tint = if (isFavorite) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(16.dp)
+                    )
                 }
-                
+
+                // More options button
                 IconButton(
                     onClick = onMoreClick,
                     modifier = Modifier.size(32.dp)
@@ -110,8 +228,8 @@ fun SearchSongItem(
                     Icon(
                         imageVector = Icons.Default.MoreVert,
                         contentDescription = "More options",
-                        modifier = Modifier.size(18.dp),
-                        tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(16.dp)
                     )
                 }
             }
@@ -120,39 +238,122 @@ fun SearchSongItem(
 }
 
 @Composable
-private fun highlightSearchQuery(text: String, query: String): androidx.compose.ui.text.AnnotatedString {
-    if (query.isBlank()) {
-        return buildAnnotatedString { append(text) }
+fun SearchSongItemCompact(
+    song: Song,
+    isSelected: Boolean,
+    isFavorite: Boolean,
+    isCurrentlyPlaying: Boolean,
+    isPlaying: Boolean,
+    onClick: () -> Unit,
+    onToggleFavorite: () -> Unit,
+    searchQuery: String,
+    modifier: Modifier = Modifier
+) {
+    ListItem(
+        headlineContent = {
+            Text(
+                text = highlightSearchTerm(song.title, searchQuery),
+                fontWeight = if (isCurrentlyPlaying) FontWeight.SemiBold else FontWeight.Normal,
+                color = if (isCurrentlyPlaying) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        },
+        supportingContent = {
+            Text(
+                text = "${highlightSearchTerm(song.artist, searchQuery)} • ${formatDuration(song.duration)}",
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        },
+        leadingContent = {
+            Box(
+                modifier = Modifier.size(40.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                when {
+                    isCurrentlyPlaying -> {
+                        Icon(
+                            imageVector = if (isPlaying) Icons.Default.Equalizer else Icons.Default.Pause,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                    else -> {
+                        Icon(
+                            imageVector = Icons.Default.MusicNote,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+        },
+        trailingContent = {
+            IconButton(onClick = onToggleFavorite) {
+                Icon(
+                    imageVector = if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                    contentDescription = null,
+                    tint = if (isFavorite) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+        },
+        modifier = modifier
+            .clickable { onClick() }
+            .then(
+                if (isSelected) {
+                    Modifier.background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f))
+                } else {
+                    Modifier
+                }
+            )
+    )
+}
+
+@Composable
+private fun highlightSearchTerm(text: String, searchTerm: String): AnnotatedString {
+    if (searchTerm.isBlank() || text.isBlank()) {
+        return AnnotatedString(text)
     }
-    
+
     return buildAnnotatedString {
         val lowerText = text.lowercase()
-        val lowerQuery = query.lowercase()
+        val lowerSearchTerm = searchTerm.lowercase()
+        
         var startIndex = 0
         
         while (startIndex < text.length) {
-            val index = lowerText.indexOf(lowerQuery, startIndex)
+            val index = lowerText.indexOf(lowerSearchTerm, startIndex)
+            
             if (index == -1) {
+                // No more matches, append remaining text
                 append(text.substring(startIndex))
                 break
             }
             
-            // Add text before match
-            if (index > startIndex) {
-                append(text.substring(startIndex, index))
-            }
+            // Append text before match
+            append(text.substring(startIndex, index))
             
-            // Add highlighted match
-            withStyle(
-                style = SpanStyle(
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary
+            // Append highlighted match
+            pushStyle(
+                SpanStyle(
+                    background = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f),
+                    fontWeight = FontWeight.SemiBold
                 )
-            ) {
-                append(text.substring(index, index + query.length))
-            }
+            )
+            append(text.substring(index, index + searchTerm.length))
+            pop()
             
-            startIndex = index + query.length
+            startIndex = index + searchTerm.length
         }
     }
+}
+
+private fun formatDuration(durationMs: Long): String {
+    val totalSeconds = durationMs / 1000
+    val minutes = totalSeconds / 60
+    val seconds = totalSeconds % 60
+    return String.format("%d:%02d", minutes, seconds)
 }

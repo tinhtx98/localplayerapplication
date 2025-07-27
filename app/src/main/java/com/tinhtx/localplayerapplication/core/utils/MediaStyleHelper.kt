@@ -1,192 +1,185 @@
 package com.tinhtx.localplayerapplication.core.utils
 
-import android.app.Notification
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
-import android.graphics.Bitmap
-import android.os.Build
-import androidx.annotation.OptIn
+import android.support.v4.media.session.MediaSessionCompat
 import androidx.core.app.NotificationCompat
-import androidx.media.app.NotificationCompat as MediaNotificationCompat // Correct import
-import androidx.media3.common.MediaMetadata
-import androidx.media3.common.Player
-import androidx.media3.common.util.UnstableApi
-import androidx.media3.session.MediaSession
+import androidx.media.app.NotificationCompat as MediaNotificationCompat
+import com.tinhtx.localplayerapplication.R
 import com.tinhtx.localplayerapplication.core.constants.NotificationConstants
 import com.tinhtx.localplayerapplication.presentation.MainActivity
+import com.tinhtx.localplayerapplication.presentation.service.MusicService
 
+/**
+ * Helper class for creating MediaStyle notifications
+ */
 object MediaStyleHelper {
     
     /**
-     * Create media style notification
+     * Create MediaStyle notification builder
      */
-    @OptIn(UnstableApi::class)
-    fun createMediaNotification(
+    fun createMediaStyleNotification(
         context: Context,
-        mediaSession: MediaSession,
-        player: Player,
-        albumArt: Bitmap?
-    ): Notification {
-        val mediaMetadata = player.mediaMetadata
+        title: String,
+        artist: String,
+        album: String,
+        isPlaying: Boolean,
+        mediaSession: MediaSessionCompat,
+        channelId: String
+    ): NotificationCompat.Builder {
         
-        val playPauseAction = if (player.isPlaying) {
-            NotificationCompat.Action.Builder(
-                android.R.drawable.ic_media_pause,
-                "Pause",
-                createPendingIntent(context, NotificationConstants.ACTION_PLAY_PAUSE)
-            ).build()
-        } else {
-            NotificationCompat.Action.Builder(
-                android.R.drawable.ic_media_play,
-                "Play",
-                createPendingIntent(context, NotificationConstants.ACTION_PLAY_PAUSE)
-            ).build()
-        }
-        
-        val previousAction = NotificationCompat.Action.Builder(
-            android.R.drawable.ic_media_previous,
-            "Previous",
-            createPendingIntent(context, NotificationConstants.ACTION_PREVIOUS)
-        ).build()
-        
-        val nextAction = NotificationCompat.Action.Builder(
-            android.R.drawable.ic_media_next,
-            "Next",
-            createPendingIntent(context, NotificationConstants.ACTION_NEXT)
-        ).build()
-        
-        val stopAction = NotificationCompat.Action.Builder(
-            android.R.drawable.ic_menu_close_clear_cancel,
-            "Stop",
-            createPendingIntent(context, NotificationConstants.ACTION_STOP)
-        ).build()
-        
-        val contentIntent = PendingIntent.getActivity(
-            context,
-            NotificationConstants.REQUEST_CODE_OPEN_PLAYER,
-            Intent(context, MainActivity::class.java).apply {
-                flags = Intent.FLAG_ACTIVITY_SINGLE_TOP
-            },
-            getPendingIntentFlags()
-        )
-        
-        return NotificationCompat.Builder(context, NotificationConstants.MUSIC_CHANNEL_ID)
-            .setContentTitle(mediaMetadata.title ?: "Unknown")
-            .setContentText(mediaMetadata.artist ?: "Unknown Artist")
-            .setSubText(mediaMetadata.albumTitle ?: "Unknown Album")
-            .setLargeIcon(albumArt)
-            .setSmallIcon(android.R.drawable.ic_media_play)
-            .setContentIntent(contentIntent)
+        return NotificationCompat.Builder(context, channelId)
+            .setSmallIcon(R.drawable.ic_music_note)
+            .setContentTitle(title)
+            .setContentText(artist)
+            .setSubText(album)
+            .setContentIntent(createContentIntent(context))
             .setDeleteIntent(createPendingIntent(context, NotificationConstants.ACTION_STOP))
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setOnlyAlertOnce(true)
             .setShowWhen(false)
-            .addAction(previousAction)
-            .addAction(playPauseAction)
-            .addAction(nextAction)
-            .addAction(stopAction)
+            .addAction(createAction(context, R.drawable.ic_skip_previous, "Previous", NotificationConstants.ACTION_SKIP_PREVIOUS))
+            .addAction(createPlayPauseAction(context, isPlaying))
+            .addAction(createAction(context, R.drawable.ic_skip_next, "Next", NotificationConstants.ACTION_SKIP_NEXT))
             .setStyle(
                 MediaNotificationCompat.MediaStyle()
-                    .setMediaSession(mediaSession.sessionCompatToken)
+                    .setMediaSession(mediaSession.sessionToken)
                     .setShowActionsInCompactView(*NotificationConstants.SHOW_ACTIONS_IN_COMPACT_VIEW)
                     .setShowCancelButton(true)
                     .setCancelButtonIntent(createPendingIntent(context, NotificationConstants.ACTION_STOP))
             )
-            .setPriority(NotificationCompat.PRIORITY_LOW)
-            .setCategory(NotificationCompat.CATEGORY_TRANSPORT)
-            .build()
+            .setColor(context.getColor(R.color.primary))
     }
     
     /**
-     * Create sleep timer notification
+     * Create play/pause action based on current state
      */
-    fun createSleepTimerNotification(
-        context: Context,
-        timeRemaining: String
-    ): Notification {
-        val cancelIntent = PendingIntent.getService(
-            context,
-            NotificationConstants.REQUEST_CODE_CANCEL_SLEEP_TIMER,
-            Intent().apply {
-                action = NotificationConstants.ACTION_CANCEL_SLEEP_TIMER
-            },
-            getPendingIntentFlags()
-        )
+    private fun createPlayPauseAction(context: Context, isPlaying: Boolean): NotificationCompat.Action {
+        val icon = if (isPlaying) R.drawable.ic_pause else R.drawable.ic_play_arrow
+        val title = if (isPlaying) "Pause" else "Play"
+        val action = NotificationConstants.ACTION_PLAY_PAUSE
         
-        return NotificationCompat.Builder(context, NotificationConstants.SLEEP_TIMER_CHANNEL_ID)
-            .setContentTitle("Sleep Timer")
-            .setContentText("Music will stop in $timeRemaining")
-            .setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
-            .setOngoing(true)
-            .setShowWhen(false)
-            .addAction(
-                NotificationCompat.Action.Builder(
-                    android.R.drawable.ic_menu_close_clear_cancel,
-                    "Cancel",
-                    cancelIntent
-                ).build()
-            )
-            .setCategory(NotificationCompat.CATEGORY_ALARM)
-            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
-            .build()
+        return createAction(context, icon, title, action)
     }
     
     /**
-     * Create pending intent for notification actions
+     * Create notification action
+     */
+    private fun createAction(
+        context: Context,
+        icon: Int,
+        title: String,
+        action: String
+    ): NotificationCompat.Action {
+        val pendingIntent = createPendingIntent(context, action)
+        return NotificationCompat.Action.Builder(icon, title, pendingIntent).build()
+    }
+    
+    /**
+     * Create PendingIntent for service actions
      */
     private fun createPendingIntent(context: Context, action: String): PendingIntent {
-        val intent = Intent(action).apply {
-            setPackage(context.packageName)
+        val intent = Intent(context, MusicService::class.java).apply {
+            this.action = action
         }
         
-        val requestCode = when (action) {
-            NotificationConstants.ACTION_PLAY_PAUSE -> NotificationConstants.REQUEST_CODE_PLAY_PAUSE
-            NotificationConstants.ACTION_PREVIOUS -> NotificationConstants.REQUEST_CODE_PREVIOUS
-            NotificationConstants.ACTION_NEXT -> NotificationConstants.REQUEST_CODE_NEXT
-            NotificationConstants.ACTION_STOP -> NotificationConstants.REQUEST_CODE_STOP
-            NotificationConstants.ACTION_CANCEL_SLEEP_TIMER -> NotificationConstants.REQUEST_CODE_CANCEL_SLEEP_TIMER
-            else -> 0
-        }
-        
-        return PendingIntent.getBroadcast(
+        val requestCode = getRequestCode(action)
+        return PendingIntent.getService(
             context,
             requestCode,
             intent,
-            getPendingIntentFlags()
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
     }
     
     /**
-     * Get appropriate PendingIntent flags based on Android version
+     * Create PendingIntent for opening the app
      */
-    private fun getPendingIntentFlags(): Int {
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
-        } else {
-            PendingIntent.FLAG_UPDATE_CURRENT
+    private fun createContentIntent(context: Context): PendingIntent {
+        val intent = Intent(context, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
+        }
+        
+        return PendingIntent.getActivity(
+            context,
+            NotificationConstants.REQUEST_CODE_CONTENT,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+    }
+    
+    /**
+     * Get unique request code for each action
+     */
+    private fun getRequestCode(action: String): Int {
+        return when (action) {
+            NotificationConstants.ACTION_PLAY_PAUSE -> NotificationConstants.REQUEST_CODE_PLAY_PAUSE
+            NotificationConstants.ACTION_SKIP_PREVIOUS -> NotificationConstants.REQUEST_CODE_SKIP_PREVIOUS
+            NotificationConstants.ACTION_SKIP_NEXT -> NotificationConstants.REQUEST_CODE_SKIP_NEXT
+            NotificationConstants.ACTION_STOP -> NotificationConstants.REQUEST_CODE_STOP
+            else -> 0
         }
     }
     
     /**
-     * Extract notification info from MediaMetadata
+     * Create expanded MediaStyle notification with more actions
      */
-    data class NotificationInfo(
-        val title: String,
-        val artist: String,
-        val album: String,
-        val duration: Long,
-        val artworkBitmap: Bitmap?
-    )
-
-    @OptIn(UnstableApi::class)
-    fun extractNotificationInfo(mediaMetadata: MediaMetadata, artworkBitmap: Bitmap?): NotificationInfo {
-        return NotificationInfo(
-            title = mediaMetadata.title?.toString() ?: "Unknown",
-            artist = mediaMetadata.artist?.toString() ?: "Unknown Artist",
-            album = mediaMetadata.albumTitle?.toString() ?: "Unknown Album",
-            duration = mediaMetadata.durationMs ?: 0L,
-            artworkBitmap = artworkBitmap
-        )
+    fun createExpandedMediaStyleNotification(
+        context: Context,
+        title: String,
+        artist: String,
+        album: String,
+        isPlaying: Boolean,
+        isShuffleOn: Boolean,
+        repeatMode: Int,
+        mediaSession: MediaSessionCompat,
+        channelId: String
+    ): NotificationCompat.Builder {
+        
+        return NotificationCompat.Builder(context, channelId)
+            .setSmallIcon(R.drawable.ic_music_note)
+            .setContentTitle(title)
+            .setContentText(artist)
+            .setSubText(album)
+            .setContentIntent(createContentIntent(context))
+            .setDeleteIntent(createPendingIntent(context, NotificationConstants.ACTION_STOP))
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .setOnlyAlertOnce(true)
+            .setShowWhen(false)
+            .addAction(createShuffleAction(context, isShuffleOn))
+            .addAction(createAction(context, R.drawable.ic_skip_previous, "Previous", NotificationConstants.ACTION_SKIP_PREVIOUS))
+            .addAction(createPlayPauseAction(context, isPlaying))
+            .addAction(createAction(context, R.drawable.ic_skip_next, "Next", NotificationConstants.ACTION_SKIP_NEXT))
+            .addAction(createRepeatAction(context, repeatMode))
+            .setStyle(
+                MediaNotificationCompat.MediaStyle()
+                    .setMediaSession(mediaSession.sessionToken)
+                    .setShowActionsInCompactView(1, 2, 3) // Previous, Play/Pause, Next
+                    .setShowCancelButton(true)
+                    .setCancelButtonIntent(createPendingIntent(context, NotificationConstants.ACTION_STOP))
+            )
+            .setColor(context.getColor(R.color.primary))
+    }
+    
+    /**
+     * Create shuffle action
+     */
+    private fun createShuffleAction(context: Context, isShuffleOn: Boolean): NotificationCompat.Action {
+        val icon = if (isShuffleOn) R.drawable.ic_shuffle_on else R.drawable.ic_shuffle
+        val title = if (isShuffleOn) "Shuffle Off" else "Shuffle On"
+        return createAction(context, icon, title, "action_shuffle")
+    }
+    
+    /**
+     * Create repeat action
+     */
+    private fun createRepeatAction(context: Context, repeatMode: Int): NotificationCompat.Action {
+        val (icon, title) = when (repeatMode) {
+            1 -> Pair(R.drawable.ic_repeat_one, "Repeat One")
+            2 -> Pair(R.drawable.ic_repeat_on, "Repeat Off")
+            else -> Pair(R.drawable.ic_repeat, "Repeat All")
+        }
+        return createAction(context, icon, title, "action_repeat")
     }
 }

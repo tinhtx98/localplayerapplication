@@ -2,142 +2,359 @@ package com.tinhtx.localplayerapplication.data.local.cache
 
 import android.content.Context
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import coil.ImageLoader
+import coil.disk.DiskCache
+import coil.memory.MemoryCache
 import coil.request.ImageRequest
-import coil.request.SuccessResult
-import com.tinhtx.localplayerapplication.core.constants.MediaConstants
-import com.tinhtx.localplayerapplication.core.di.IoDispatcher
-import com.tinhtx.localplayerapplication.core.utils.MediaUtils
-import kotlinx.coroutines.CoroutineDispatcher
+import com.tinhtx.localplayerapplication.core.constants.AppConstants
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import timber.log.Timber
 import java.io.File
-import java.io.FileOutputStream
 import javax.inject.Inject
 import javax.inject.Singleton
 
+/**
+ * Manages general image caching using Coil ImageLoader
+ */
 @Singleton
 class ImageCacheManager @Inject constructor(
     private val context: Context,
-    private val imageLoader: ImageLoader,
-    @IoDispatcher private val ioDispatcher: CoroutineDispatcher
+    private val imageLoader: ImageLoader
 ) {
     
-    private val cacheDir by lazy {
-        File(context.cacheDir, "album_art").apply {
-            if (!exists()) mkdirs()
+    companion object {
+        private const val TAG = "ImageCacheManager"
+        private const val CACHE_DIR_NAME = "image_cache"
+        private const val MAX_CACHE_AGE_MS = 7 * 24 * 60 * 60 * 1000L // 7 days
+    }
+    
+    private val cacheDir: File by lazy {
+        File(context.cacheDir, CACHE_DIR_NAME).apply {
+            if (!exists()) {
+                mkdirs()
+            }
         }
     }
     
-    suspend fun getAlbumArt(
-        albumId: Long,
-        filePath: String? = null
-    ): Bitmap? = withContext(ioDispatcher) {
-        // Try to get from cache first
-        getCachedAlbumArt(albumId)?.let { return@withContext it }
-        
-        // Extract from file if path provided
-        filePath?.let { path ->
-            MediaUtils.extractAlbumArt(path)?.let { bitmap ->
-                cacheAlbumArt(albumId, bitmap)
-                return@withContext bitmap
-            }
-        }
-        
-        // Try to get from MediaStore
-        val albumArtUri = MediaUtils.getAlbumArtUri(albumId)
+    /**
+     * Preload image into cache
+     */
+    suspend fun preloadImage(url: String): Boolean = withContext(Dispatchers.IO) {
         try {
             val request = ImageRequest.Builder(context)
-                .data(albumArtUri)
-                .size(MediaConstants.ALBUM_ART_SIZE)
+                .data(url)
                 .build()
             
-            val result = imageLoader.execute(request)
-            if (result is SuccessResult) {
-                val bitmap = (result.drawable as? android.graphics.drawable.BitmapDrawable)?.bitmap
-                bitmap?.let { 
-                    cacheAlbumArt(albumId, it)
-                    return@withContext it
-                }
-            }
-        } catch (e: Exception) {
-            // Fallback to default
+            imageLoader.execute(request)
+            
+            Timber.d("$TAG - Preloaded image: $url")
+            true
+        } catch (exception: Exception) {
+            Timber.e(exception, "$TAG - Error preloading image: $url")
+            false
         }
-        
-        null
     }
     
-    private suspend fun getCachedAlbumArt(albumId: Long): Bitmap? = withContext(ioDispatcher) {
-        val cacheFile = File(cacheDir, "album_$albumId.jpg")
-        if (cacheFile.exists()) {
-            try {
-                return@withContext BitmapFactory.decodeFile(cacheFile.absolutePath)
-            } catch (e: Exception) {
-                cacheFile.delete()
-            }
-        }
-        null
+    /**
+     * Check if image is cached in memory
+     */
+    fun isImageCachedInMemory(url: String): Boolean {
+        return imageLoader.memoryCache?.get(MemoryCache.Key(url)) != null
     }
     
-    private suspend fun cacheAlbumArt(
-        albumId: Long, 
-        bitmap: Bitmap
-    ) = withContext(ioDispatcher) {
+    /**
+     * Check if image is cached on disk
+     */
+    suspend fun isImageCachedOnDisk(url: String): Boolean = withContext(Dispatchers.IO) {
         try {
-            val cacheFile = File(cacheDir, "album_$albumId.jpg")
-            val outputStream = FileOutputStream(cacheFile)
-            bitmap.compress(
-                Bitmap.CompressFormat.JPEG, 
-                MediaConstants.ALBUM_ART_QUALITY, 
-                outputStream
-            )
-            outputStream.close()
-        } catch (e: Exception) {
-            // Ignore cache errors
+            val diskCache = imageLoader.diskCache
+            val snapshot = diskCache?.openSnapshot(url)
+            val isCached = snapshot != null
+            snapshot?.close()
+            isCached
+        } catch (exception: Exception) {
+            false
         }
     }
     
-    suspend fun preloadAlbumArt(albumIds: List<Long>) = withContext(ioDispatcher) {
-        albumIds.forEach { albumId ->
-            if (!isCached(albumId)) {
-                getAlbumArt(albumId)
-            }
-        }
-    }
-    
-    private fun isCached(albumId: Long): Boolean {
-        val cacheFile = File(cacheDir, "album_$albumId.jpg")
-        return cacheFile.exists()
-    }
-    
-    suspend fun clearCache() = withContext(ioDispatcher) {
+    /**
+     * Remove image from all caches
+     */
+    suspend fun removeImageFromCache(url: String): Boolean = withContext(Dispatchers.IO) {
         try {
-            cacheDir.listFiles()?.forEach { file ->
-                file.delete()
-            }
-        } catch (e: Exception) {
-            // Ignore
+            var removed = false
+            
+            // Remove from memory cache
+            imageLoader.memoryCache?.remove(MemoryCache.Key(url))
+            removed = true
+            
+            // Remove from disk cache
+            imageLoader.diskCache?.remove(url)
+            
+            Timber.d("$TAG - Removed image from cache: $url")
+            removed
+        } catch (exception: Exception) {
+            Timber.e(exception, "$TAG - Error removing image from cache: $url")
+            false
         }
     }
     
-    suspend fun getCacheSize(): Long = withContext(ioDispatcher) {
+    /**
+     * Clear memory cache
+     */
+    fun clearMemoryCache() {
         try {
-            cacheDir.listFiles()?.sumOf { it.length() } ?: 0L
-        } catch (e: Exception) {
+            imageLoader.memoryCache?.clear()
+            Timber.d("$TAG - Cleared memory cache")
+        } catch (exception: Exception) {
+            Timber.e(exception, "$TAG - Error clearing memory cache")
+        }
+    }
+    
+    /**
+     * Clear disk cache
+     */
+    suspend fun clearDiskCache(): Long = withContext(Dispatchers.IO) {
+        try {
+            val diskCache = imageLoader.diskCache
+            val initialSize = diskCache?.size ?: 0L
+            
+            diskCache?.clear()
+            
+            val freedBytes = initialSize
+            Timber.d("$TAG - Cleared disk cache, freed ${freedBytes / (1024 * 1024)}MB")
+            freedBytes
+        } catch (exception: Exception) {
+            Timber.e(exception, "$TAG - Error clearing disk cache")
             0L
         }
     }
     
-    suspend fun cleanOldCache(maxAgeMillis: Long = 7 * 24 * 60 * 60 * 1000L) = withContext(ioDispatcher) {
-        val now = System.currentTimeMillis()
+    /**
+     * Clear all caches
+     */
+    suspend fun clearAllCaches(): Long = withContext(Dispatchers.IO) {
+        val freedBytes = clearDiskCache()
+        clearMemoryCache()
+        freedBytes
+    }
+    
+    /**
+     * Clear expired cache entries
+     */
+    suspend fun clearExpiredCache(): Long = withContext(Dispatchers.IO) {
         try {
+            var freedBytes = 0L
+            val currentTime = System.currentTimeMillis()
+            val cutoffTime = currentTime - MAX_CACHE_AGE_MS
+            
+            // Clear expired files from our custom cache directory
             cacheDir.listFiles()?.forEach { file ->
-                if (now - file.lastModified() > maxAgeMillis) {
+                if (file.isFile && file.lastModified() < cutoffTime) {
+                    val fileSize = file.length()
+                    if (file.delete()) {
+                        freedBytes += fileSize
+                    }
+                }
+            }
+            
+            if (freedBytes > 0) {
+                Timber.d("$TAG - Cleared expired cache, freed ${freedBytes / (1024 * 1024)}MB")
+            }
+            
+            freedBytes
+        } catch (exception: Exception) {
+            Timber.e(exception, "$TAG - Error clearing expired cache")
+            0L
+        }
+    }
+    
+    /**
+     * Get cache statistics
+     */
+    suspend fun getCacheStats(): ImageCacheStats = withContext(Dispatchers.IO) {
+        try {
+            val memoryCache = imageLoader.memoryCache
+            val diskCache = imageLoader.diskCache
+            
+            val memoryCacheSize = memoryCache?.size ?: 0L
+            val memoryCacheMaxSize = memoryCache?.maxSize ?: 0L
+            val diskCacheSize = diskCache?.size ?: 0L
+            val diskCacheMaxSize = diskCache?.maxSize ?: 0L
+            
+            // Count custom cache files
+            val customCacheFiles = cacheDir.listFiles { it.isFile } ?: emptyArray()
+            val customCacheSize = customCacheFiles.sumOf { it.length() }
+            val customCacheCount = customCacheFiles.size
+            
+            ImageCacheStats(
+                memoryCacheSize = memoryCacheSize,
+                memoryCacheMaxSize = memoryCacheMaxSize,
+                diskCacheSize = diskCacheSize,
+                diskCacheMaxSize = diskCacheMaxSize,
+                customCacheSize = customCacheSize,
+                customCacheCount = customCacheCount
+            )
+        } catch (exception: Exception) {
+            Timber.e(exception, "$TAG - Error getting cache stats")
+            ImageCacheStats()
+        }
+    }
+    
+    /**
+     * Optimize cache by removing least recently used items
+     */
+    suspend fun optimizeCache(targetSizeBytes: Long): Long = withContext(Dispatchers.IO) {
+        try {
+            var freedBytes = 0L
+            
+            // Get current cache stats
+            val stats = getCacheStats()
+            val totalSize = stats.diskCacheSize + stats.customCacheSize
+            
+            if (totalSize <= targetSizeBytes) {
+                return@withContext 0L
+            }
+            
+            // Clear custom cache files (oldest first)
+            val customFiles = cacheDir.listFiles { it.isFile }?.sortedBy { it.lastModified() } ?: emptyArray()
+            
+            for (file in customFiles) {
+                if (stats.diskCacheSize + stats.customCacheSize - freedBytes <= targetSizeBytes) {
+                    break
+                }
+                
+                val fileSize = file.length()
+                if (file.delete()) {
+                    freedBytes += fileSize
+                }
+            }
+            
+            Timber.d("$TAG - Optimized cache, freed ${freedBytes / (1024 * 1024)}MB")
+            freedBytes
+        } catch (exception: Exception) {
+            Timber.e(exception, "$TAG - Error optimizing cache")
+            0L
+        }
+    }
+    
+    /**
+     * Preload images in background
+     */
+    suspend fun preloadImages(urls: List<String>) = withContext(Dispatchers.IO) {
+        try {
+            urls.forEach { url ->
+                preloadImage(url)
+            }
+            Timber.d("$TAG - Preloaded ${urls.size} images")
+        } catch (exception: Exception) {
+            Timber.e(exception, "$TAG - Error preloading images")
+        }
+    }
+    
+    /**
+     * Save bitmap to custom cache
+     */
+    suspend fun saveBitmapToCache(key: String, bitmap: Bitmap): Boolean = withContext(Dispatchers.IO) {
+        try {
+            val cacheFile = File(cacheDir, "${key.hashCode()}.jpg")
+            cacheFile.outputStream().use { outputStream ->
+                bitmap.compress(Bitmap.CompressFormat.JPEG, 85, outputStream)
+            }
+            
+            Timber.d("$TAG - Saved bitmap to cache: $key")
+            true
+        } catch (exception: Exception) {
+            Timber.e(exception, "$TAG - Error saving bitmap to cache: $key")
+            false
+        }
+    }
+    
+    /**
+     * Load bitmap from custom cache
+     */
+    suspend fun loadBitmapFromCache(key: String): Bitmap? = withContext(Dispatchers.IO) {
+        try {
+            val cacheFile = File(cacheDir, "${key.hashCode()}.jpg")
+            if (cacheFile.exists()) {
+                android.graphics.BitmapFactory.decodeFile(cacheFile.absolutePath)
+            } else {
+                null
+            }
+        } catch (exception: Exception) {
+            Timber.e(exception, "$TAG - Error loading bitmap from cache: $key")
+            null
+        }
+    }
+    
+    /**
+     * Get total cache size across all cache types
+     */
+    suspend fun getTotalCacheSize(): Long = withContext(Dispatchers.IO) {
+        val stats = getCacheStats()
+        stats.memoryCacheSize + stats.diskCacheSize + stats.customCacheSize
+    }
+    
+    /**
+     * Check if cache is healthy (not corrupted)
+     */
+    suspend fun isCacheHealthy(): Boolean = withContext(Dispatchers.IO) {
+        try {
+            // Check if cache directories exist and are accessible
+            val diskCache = imageLoader.diskCache
+            val memoryCache = imageLoader.memoryCache
+            
+            val diskCacheHealthy = diskCache?.directory?.exists() ?: true
+            val memoryCacheHealthy = memoryCache != null
+            val customCacheHealthy = cacheDir.exists() && cacheDir.canRead() && cacheDir.canWrite()
+            
+            diskCacheHealthy && memoryCacheHealthy && customCacheHealthy
+        } catch (exception: Exception) {
+            Timber.e(exception, "$TAG - Error checking cache health")
+            false
+        }
+    }
+    
+    /**
+     * Repair cache if corrupted
+     */
+    suspend fun repairCache(): Boolean = withContext(Dispatchers.IO) {
+        try {
+            // Recreate custom cache directory if needed
+            if (!cacheDir.exists()) {
+                cacheDir.mkdirs()
+            }
+            
+            // Clear corrupted files
+            cacheDir.listFiles()?.forEach { file ->
+                if (file.isFile && file.length() == 0L) {
                     file.delete()
                 }
             }
-        } catch (e: Exception) {
-            // Ignore
+            
+            Timber.d("$TAG - Cache repaired successfully")
+            true
+        } catch (exception: Exception) {
+            Timber.e(exception, "$TAG - Error repairing cache")
+            false
         }
     }
+}
+
+/**
+ * Image cache statistics
+ */
+data class ImageCacheStats(
+    val memoryCacheSize: Long = 0L,
+    val memoryCacheMaxSize: Long = 0L,
+    val diskCacheSize: Long = 0L,
+    val diskCacheMaxSize: Long = 0L,
+    val customCacheSize: Long = 0L,
+    val customCacheCount: Int = 0
+) {
+    val totalCacheSize: Long get() = memoryCacheSize + diskCacheSize + customCacheSize
+    val memoryCacheUsagePercent: Float get() = if (memoryCacheMaxSize > 0) (memoryCacheSize.toFloat() / memoryCacheMaxSize) * 100f else 0f
+    val diskCacheUsagePercent: Float get() = if (diskCacheMaxSize > 0) (diskCacheSize.toFloat() / diskCacheMaxSize) * 100f else 0f
+    val totalCacheSizeMB: Double get() = totalCacheSize / (1024.0 * 1024.0)
 }

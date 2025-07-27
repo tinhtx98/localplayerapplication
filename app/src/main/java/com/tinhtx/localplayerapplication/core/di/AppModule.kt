@@ -1,6 +1,7 @@
 package com.tinhtx.localplayerapplication.core.di
 
 import android.content.Context
+import com.tinhtx.localplayerapplication.core.utils.NotificationChannelHelper
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -13,46 +14,59 @@ import kotlinx.coroutines.SupervisorJob
 import javax.inject.Qualifier
 import javax.inject.Singleton
 
+/**
+ * Main application module providing core dependencies
+ */
 @Module
 @InstallIn(SingletonComponent::class)
 object AppModule {
-    
+
     @Provides
     @Singleton
-    @ApplicationCoroutineScope
-    fun provideApplicationCoroutineScope(): CoroutineScope {
-        return CoroutineScope(SupervisorJob() + Dispatchers.Default)
-    }
-    
+    fun provideApplicationContext(@ApplicationContext context: Context): Context = context
+
     @Provides
+    @Singleton
+    fun provideNotificationChannelHelper(): NotificationChannelHelper = NotificationChannelHelper
+
     @IoDispatcher
+    @Provides
     fun provideIoDispatcher(): CoroutineDispatcher = Dispatchers.IO
-    
-    @Provides
+
     @DefaultDispatcher
-    fun provideDefaultDispatcher(): CoroutineDispatcher = Dispatchers.Default
-    
     @Provides
+    fun provideDefaultDispatcher(): CoroutineDispatcher = Dispatchers.Default
+
     @MainDispatcher
+    @Provides
     fun provideMainDispatcher(): CoroutineDispatcher = Dispatchers.Main
-    
+
+    @ApplicationScope
     @Provides
     @Singleton
-    fun provideContext(@ApplicationContext context: Context): Context = context
+    fun provideApplicationScope(): CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
+    @Provides
+    @Singleton
+    fun provideSharedPreferences(@ApplicationContext context: Context) = 
+        context.getSharedPreferences("localplayer_prefs", Context.MODE_PRIVATE)
 }
 
-@Qualifier
-@Retention(AnnotationRetention.BINARY)
-annotation class ApplicationCoroutineScope
-
+/**
+ * Qualifier annotations for different dispatchers
+ */
 @Qualifier
 @Retention(AnnotationRetention.BINARY)
 annotation class IoDispatcher
 
 @Qualifier
-@Retention(AnnotationRetention.BINARY)
+@Retention(AnnotationRetention.BINARY)  
 annotation class DefaultDispatcher
 
 @Qualifier
 @Retention(AnnotationRetention.BINARY)
 annotation class MainDispatcher
+
+@Qualifier
+@Retention(AnnotationRetention.BINARY)
+annotation class ApplicationScope

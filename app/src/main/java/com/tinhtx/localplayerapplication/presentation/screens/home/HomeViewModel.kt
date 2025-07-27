@@ -4,276 +4,310 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.tinhtx.localplayerapplication.domain.model.*
 import com.tinhtx.localplayerapplication.domain.usecase.favorites.GetFavoritesUseCase
-import com.tinhtx.localplayerapplication.domain.usecase.favorites.AddToFavoritesUseCase
-import com.tinhtx.localplayerapplication.domain.usecase.favorites.RemoveFromFavoritesUseCase
-import com.tinhtx.localplayerapplication.domain.usecase.music.*
-import com.tinhtx.localplayerapplication.domain.usecase.player.PlaySongUseCase
+import com.tinhtx.localplayerapplication.domain.usecase.history.GetPlayHistoryUseCase
+import com.tinhtx.localplayerapplication.domain.usecase.music.GetAllSongsUseCase
 import com.tinhtx.localplayerapplication.domain.usecase.playlist.GetPlaylistsUseCase
-import com.tinhtx.localplayerapplication.domain.usecase.user.GetUserProfileUseCase
+import com.tinhtx.localplayerapplication.domain.usecase.settings.GetAppSettingsUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import javax.inject.Inject
 
+/**
+ * ViewModel for Home Screen - Dashboard with music overview
+ */
 @HiltViewModel
 class HomeViewModel @Inject constructor(
     private val getAllSongsUseCase: GetAllSongsUseCase,
-    private val getAllAlbumsUseCase: GetAllAlbumsUseCase,
-    private val getAllArtistsUseCase: GetAllArtistsUseCase,
-    private val getPlaylistsUseCase: GetPlaylistsUseCase,
     private val getFavoritesUseCase: GetFavoritesUseCase,
-    private val addToFavoritesUseCase: AddToFavoritesUseCase,
-    private val removeFromFavoritesUseCase: RemoveFromFavoritesUseCase,
-    private val getUserProfileUseCase: GetUserProfileUseCase,
-    private val scanMediaLibraryUseCase: ScanMediaLibraryUseCase,
-    private val playMusicUseCase: PlaySongUseCase
+    private val getPlaylistsUseCase: GetPlaylistsUseCase,
+    private val getPlayHistoryUseCase: GetPlayHistoryUseCase,
+    private val getAppSettingsUseCase: GetAppSettingsUseCase
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(HomeUiState())
     val uiState: StateFlow<HomeUiState> = _uiState.asStateFlow()
 
+    private val _isRefreshing = MutableStateFlow(false)
+    val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
+
     init {
-        observeUserProfile()
+        loadHomeData()
+        observeSettings()
     }
 
+    /**
+     * Load all home screen data
+     */
     fun loadHomeData() {
         viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isLoading = true, error = null)
-
+            _uiState.value = _uiState.value.copyWithLoading(true)
+            
             try {
-                // Load all data concurrently
-                val allSongsFlow = getAllSongsUseCase()
-                val allAlbumsFlow = getAllAlbumsUseCase()
-                val allArtistsFlow = getAllArtistsUseCase()
-                val playlistsFlow = getPlaylistsUseCase()
-                val favoritesFlow = getFavoritesUseCase()
+                // Load data concurrently for better performance
+                val recentSongsDeferred = async { getRecentSongs() }
+                val favoriteSongsDeferred = async { getFavoriteSongs() }
+                val playlistsDeferred = async { getPlaylists() }
+                val recentlyPlayedDeferred = async { getRecentlyPlayedSongs() }
+                val libraryStatsDeferred = async { getLibraryStats() }
 
-                combine(
-                    allSongsFlow,
-                    allAlbumsFlow,
-                    allArtistsFlow,
-                    playlistsFlow,
-                    favoritesFlow
-                ) { songs, albums, artists, playlists, favorites ->
-                    processHomeData(songs, albums, artists, playlists, favorites)
-                }.catch { exception ->
-                    _uiState.value = _uiState.value.copy(
-                        isLoading = false,
-                        error = exception.message ?: "Unknown error occurred"
-                    )
-                }.collect { processedData ->
-                    _uiState.value = _uiState.value.copy(
-                        isLoading = false,
-                        error = null,
-                        recentlyPlayed = processedData.recentlyPlayed,
-                        mostPlayed = processedData.mostPlayed,
-                        recentAlbums = processedData.recentAlbums,
-                        featuredArtists = processedData.featuredArtists,
-                        quickAccessPlaylists = processedData.quickAccessPlaylists,
-                        recommendedSongs = processedData.recommendedSongs,
-                        totalSongs = processedData.totalSongs,
-                        totalAlbums = processedData.totalAlbums,
-                        totalArtists = processedData.totalArtists,
-                        totalDuration = processedData.totalDuration,
-                        isEmpty = processedData.isEmpty
-                    )
-                }
-            } catch (exception: Exception) {
-                _uiState.value = _uiState.value.copy(
-                    isLoading = false,
-                    error = exception.message ?: "Failed to load music data"
+                // Await all results
+                val (recentSongs, favoriteSongs, playlists, recentlyPlayed, libraryStats) = awaitAll(
+                    recentSongsDeferred,
+                    favoriteSongsDeferred,
+                    playlistsDeferred,
+                    recentlyPlayedDeferred,
+                    libraryStatsDeferred
                 )
+
+                _uiState.value = _uiState.value.copyWithData(
+                    recentSongs = recentSongs.getOrElse { emptyList() },
+                    favoriteSongs = favoriteSongs.getOrElse { emptyList() },
+                    playlists = playlists.getOrElse { emptyList() },
+                    recentlyPlayedSongs = recentlyPlayed.getOrElse { emptyList() },
+                    libraryStats = libraryStats.getOrElse { HomeLibraryStats() }
+                )
+
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copyWithError("Failed to load home  ${e.message}")
             }
         }
     }
 
-    private fun observeUserProfile() {
+    /**
+     * Refresh home data
+     */
+    fun refresh() {
         viewModelScope.launch {
-            getUserProfileUseCase().collect { profile ->
-                _uiState.value = _uiState.value.copy(
-                    userProfile = profile
-                )
-            }
+            _isRefreshing.value = true
+            loadHomeData()
+            _isRefreshing.value = false
         }
     }
 
-    private fun processHomeData(
-        songs: List<Song>,
-        albums: List<Album>,
-        artists: List<Artist>,
-        playlists: List<Playlist>,
-        favorites: List<Song>
-    ): ProcessedHomeData {
-        val isEmpty = songs.isEmpty() && albums.isEmpty() && artists.isEmpty()
-        
-        if (isEmpty) {
-            return ProcessedHomeData(isEmpty = true)
-        }
-
-        // Recently played songs (mock data based on lastPlayed)
-        val recentlyPlayed = songs
-            .filter { it.lastPlayed != null }
-            .sortedByDescending { it.lastPlayed ?: 0L }
-            .take(10)
-
-        // Most played songs
-        val mostPlayed = songs
-            .filter { it.playCount > 0 }
-            .sortedByDescending { it.playCount }
-            .take(10)
-
-        // Recent albums (based on dateAdded)
-        val recentAlbums = albums
-            .sortedByDescending { album ->
-                songs.filter { it.albumId == album.mediaStoreId }
-                    .maxOfOrNull { it.dateAdded } ?: 0L
-            }
-            .take(8)
-
-        // Featured artists (based on play count)
-        val featuredArtists = artists
-            .sortedByDescending { artist ->
-                songs.filter { it.artistId == artist.mediaStoreId }
-                    .sumOf { it.playCount }
-            }
-            .take(6)
-
-        // Quick access playlists
-        val quickAccessPlaylists = playlists.take(6)
-
-        // Recommended songs (simple algorithm based on favorites and play count)
-        val recommendedSongs = generateRecommendations(songs, favorites)
-
-        val totalDuration = songs.sumOf { it.duration }
-
-        return ProcessedHomeData(
-            recentlyPlayed = recentlyPlayed,
-            mostPlayed = mostPlayed,
-            recentAlbums = recentAlbums,
-            featuredArtists = featuredArtists,
-            quickAccessPlaylists = quickAccessPlaylists,
-            recommendedSongs = recommendedSongs,
-            totalSongs = songs.size,
-            totalAlbums = albums.size,
-            totalArtists = artists.size,
-            totalDuration = totalDuration,
-            isEmpty = false
-        )
-    }
-
-    private fun generateRecommendations(songs: List<Song>, favorites: List<Song>): List<Song> {
-        if (favorites.isEmpty()) return emptyList()
-
-        // Get artists from favorite songs
-        val favoriteArtists = favorites.map { it.artistId }.distinct()
-        
-        // Find songs from same artists that are not in favorites
-        val recommendations = songs
-            .filter { song ->
-                favoriteArtists.contains(song.artistId) && 
-                !favorites.any { fav -> fav.id == song.id }
-            }
-            .sortedByDescending { it.playCount }
-            .take(8)
-
-        return recommendations
-    }
-
+    /**
+     * Play song from any section
+     */
     fun playSong(song: Song) {
         viewModelScope.launch {
             try {
-                playMusicUseCase(song, "home_screen")
-            } catch (exception: Exception) {
-                // Handle play error
+                // TODO: Integrate with MediaPlayerService
+                // For now, just update recently played
+                updateRecentlyPlayed(song)
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copyWithError("Failed to play song: ${e.message}")
             }
         }
     }
 
-    fun playAlbum(album: Album) {
+    /**
+     * Play playlist
+     */
+    fun playPlaylist(playlist: Playlist) {
         viewModelScope.launch {
             try {
-                // Get songs from album and play first one
-                // This would typically involve getting songs by album ID
-                // For now, we'll just log the action
-                android.util.Log.d("HomeViewModel", "Playing album: ${album.displayName}")
-            } catch (exception: Exception) {
-                // Handle play error
+                // TODO: Integrate with MediaPlayerService
+                // Get songs in playlist and start playback
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copyWithError("Failed to play playlist: ${e.message}")
             }
         }
     }
 
-    fun playArtist(artist: Artist) {
-        viewModelScope.launch {
-            try {
-                // Get songs from artist and play shuffled
-                android.util.Log.d("HomeViewModel", "Playing artist: ${artist.displayName}")
-            } catch (exception: Exception) {
-                // Handle play error
-            }
-        }
-    }
-
+    /**
+     * Toggle favorite status
+     */
     fun toggleFavorite(song: Song) {
         viewModelScope.launch {
             try {
-                if (song.isFavorite) {
-                    removeFromFavoritesUseCase(song.id)
+                // TODO: Integrate with UpdateFavoritesUseCase
+                // For now, just update local state
+                val updatedFavorites = _uiState.value.favoriteSongs.toMutableList()
+                if (updatedFavorites.any { it.id == song.id }) {
+                    updatedFavorites.removeAll { it.id == song.id }
                 } else {
-                    addToFavoritesUseCase(song.id)
+                    updatedFavorites.add(0, song)
                 }
-            } catch (exception: Exception) {
-                // Handle error
+                
+                _uiState.value = _uiState.value.copy(
+                    favoriteSongs = updatedFavorites.take(10) // Keep only top 10 for home
+                )
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copyWithError("Failed to update favorite: ${e.message}")
             }
         }
     }
 
-    fun showAddToPlaylistDialog(song: Song) {
-        // This would typically show a dialog to select playlist
-        android.util.Log.d("HomeViewModel", "Show add to playlist dialog for: ${song.title}")
+    /**
+     * Clear error state
+     */
+    fun clearError() {
+        _uiState.value = _uiState.value.copy(error = null)
     }
 
-    fun onProfileClick() {
-        // Navigate to profile or show profile menu
-        android.util.Log.d("HomeViewModel", "Profile clicked")
-    }
+    /**
+     * Search songs from home
+     */
+    fun searchSongs(query: String) {
+        if (query.isBlank()) {
+            _uiState.value = _uiState.value.copy(searchResults = emptyList(), isSearching = false)
+            return
+        }
 
-    fun onNotificationClick() {
-        // Show notifications or navigate to notifications screen
-        android.util.Log.d("HomeViewModel", "Notifications clicked")
-    }
-
-    fun retryLoadData() {
-        loadHomeData()
-    }
-
-    fun refreshData() {
-        loadHomeData()
-    }
-
-    fun startMediaScan() {
         viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isSearching = true)
+            
             try {
-                scanMediaLibraryUseCase.performFullScan()
-                loadHomeData()
-            } catch (exception: Exception) {
+                // TODO: Integrate with SearchSongsUseCase
+                val results = getAllSongsUseCase.getAllSongs().first()
+                    .filter { 
+                        it.title.contains(query, ignoreCase = true) ||
+                        it.artist.contains(query, ignoreCase = true) ||
+                        it.album.contains(query, ignoreCase = true)
+                    }
+                    .take(5) // Limit for home screen
+
                 _uiState.value = _uiState.value.copy(
-                    error = "Failed to scan media library: ${exception.message}"
+                    searchResults = results,
+                    isSearching = false
+                )
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(
+                    error = "Search failed: ${e.message}",
+                    isSearching = false
                 )
             }
         }
     }
-}
 
-private data class ProcessedHomeData(
-    val recentlyPlayed: List<Song> = emptyList(),
-    val mostPlayed: List<Song> = emptyList(),
-    val recentAlbums: List<Album> = emptyList(),
-    val featuredArtists: List<Artist> = emptyList(),
-    val quickAccessPlaylists: List<Playlist> = emptyList(),
-    val recommendedSongs: List<Song> = emptyList(),
-    val totalSongs: Int = 0,
-    val totalAlbums: Int = 0,
-    val totalArtists: Int = 0,
-    val totalDuration: Long = 0L,
-    val isEmpty: Boolean = false
-)
+    /**
+     * Handle section item click
+     */
+    fun onSectionItemClick(section: HomeSection, item: Any) {
+        when (section) {
+            HomeSection.RECENT_SONGS -> {
+                if (item is Song) playSong(item)
+            }
+            HomeSection.FAVORITES -> {
+                if (item is Song) playSong(item)
+            }
+            HomeSection.PLAYLISTS -> {
+                if (item is Playlist) playPlaylist(item)
+            }
+            HomeSection.RECENTLY_PLAYED -> {
+                if (item is Song) playSong(item)
+            }
+        }
+    }
+
+    /**
+     * Navigate to section view all
+     */
+    fun navigateToSection(section: HomeSection) {
+        _uiState.value = _uiState.value.copy(selectedSection = section)
+    }
+
+    /**
+     * Get section data for display
+     */
+    fun getSectionData(section: HomeSection): List<Any> {
+        return when (section) {
+            HomeSection.RECENT_SONGS -> _uiState.value.recentSongs
+            HomeSection.FAVORITES -> _uiState.value.favoriteSongs
+            HomeSection.PLAYLISTS -> _uiState.value.playlists
+            HomeSection.RECENTLY_PLAYED -> _uiState.value.recentlyPlayedSongs
+        }
+    }
+
+    // Private helper methods
+
+    private suspend fun getRecentSongs(): Result<List<Song>> {
+        return try {
+            val songs = getAllSongsUseCase.getRecentlyAddedSongs(10).getOrElse { emptyList() }
+            Result.success(songs)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    private suspend fun getFavoriteSongs(): Result<List<Song>> {
+        return try {
+            val favorites = getFavoritesUseCase.getFavoriteSongs().first().take(10)
+            Result.success(favorites)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    private suspend fun getPlaylists(): Result<List<Playlist>> {
+        return try {
+            val playlists = getPlaylistsUseCase.getAllPlaylists().first().take(6)
+            Result.success(playlists)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    private suspend fun getRecentlyPlayedSongs(): Result<List<Song>> {
+        return try {
+            val recentlyPlayed = getPlayHistoryUseCase.getRecentlyPlayedSongs(8).getOrElse { emptyList() }
+            Result.success(recentlyPlayed)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    private suspend fun getLibraryStats(): Result<HomeLibraryStats> {
+        return try {
+            val allSongs = getAllSongsUseCase.getAllSongs().first()
+            val favorites = getFavoritesUseCase.getFavoriteSongs().first()
+            val playlists = getPlaylistsUseCase.getAllPlaylists().first()
+            
+            val stats = HomeLibraryStats(
+                totalSongs = allSongs.size,
+                totalFavorites = favorites.size,
+                totalPlaylists = playlists.size,
+                totalDuration = allSongs.sumOf { it.duration },
+                totalArtists = allSongs.map { it.artist }.distinct().size,
+                totalAlbums = allSongs.map { it.album }.distinct().size
+            )
+            
+            Result.success(stats)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    private suspend fun updateRecentlyPlayed(song: Song) {
+        // Add song to recently played list
+        val currentRecentlyPlayed = _uiState.value.recentlyPlayedSongs.toMutableList()
+        currentRecentlyPlayed.removeAll { it.id == song.id }
+        currentRecentlyPlayed.add(0, song)
+        
+        _uiState.value = _uiState.value.copy(
+            recentlyPlayedSongs = currentRecentlyPlayed.take(8)
+        )
+    }
+
+    private fun observeSettings() {
+        viewModelScope.launch {
+            getAppSettingsUseCase.getAppSettings()
+                .catch { e ->
+                    _uiState.value = _uiState.value.copyWithError("Failed to load settings: ${e.message}")
+                }
+                .collect { settings ->
+                    _uiState.value = _uiState.value.copy(
+                        currentTheme = settings.theme,
+                        gridSize = settings.gridSize
+                    )
+                }
+        }
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        // Clean up any resources if needed
+    }
+}

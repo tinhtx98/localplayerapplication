@@ -2,230 +2,198 @@ package com.tinhtx.localplayerapplication.core.utils
 
 import android.graphics.Bitmap
 import android.graphics.Color
-import androidx.compose.material3.ColorScheme
-import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.lightColorScheme
+import androidx.annotation.ColorInt
 import androidx.compose.ui.graphics.toArgb
-import androidx.core.graphics.ColorUtils
 import androidx.palette.graphics.Palette
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
-import kotlin.math.max
-import kotlin.math.min
-import androidx.compose.ui.graphics.Color as ComposeColor
+import kotlin.math.*
 
+/**
+ * Utility functions for color manipulation and extraction
+ */
 object ColorUtils {
-    
+
     /**
      * Extract dominant color from bitmap using Palette API
      */
-    suspend fun extractDominantColor(bitmap: Bitmap?): ComposeColor = withContext(Dispatchers.Default) {
-        if (bitmap == null) return@withContext ComposeColor.Gray
-        
-        try {
-            val palette = Palette.from(bitmap).generate()
-            val dominantColor = palette.getDominantColor(Color.GRAY)
-            ComposeColor(dominantColor)
+    fun extractDominantColor(bitmap: Bitmap?, @ColorInt fallbackColor: Int = Color.GRAY): Int {
+        return try {
+            bitmap?.let {
+                val palette = Palette.from(it).generate()
+                palette.getDominantColor(fallbackColor)
+            } ?: fallbackColor
         } catch (e: Exception) {
-            ComposeColor.Gray
+            fallbackColor
         }
     }
-    
+
     /**
      * Extract vibrant color from bitmap
      */
-    suspend fun extractVibrantColor(bitmap: Bitmap?): ComposeColor = withContext(Dispatchers.Default) {
-        if (bitmap == null) return@withContext ComposeColor.Gray
-        
-        try {
-            val palette = Palette.from(bitmap).generate()
-            val vibrantColor = palette.getVibrantColor(Color.GRAY)
-            ComposeColor(vibrantColor)
+    fun extractVibrantColor(bitmap: Bitmap?, @ColorInt fallbackColor: Int = Color.BLUE): Int {
+        return try {
+            bitmap?.let {
+                val palette = Palette.from(it).generate()
+                palette.getVibrantColor(fallbackColor)
+            } ?: fallbackColor
         } catch (e: Exception) {
-            ComposeColor.Gray
+            fallbackColor
         }
     }
-    
+
     /**
      * Extract muted color from bitmap
      */
-    suspend fun extractMutedColor(bitmap: Bitmap?): ComposeColor = withContext(Dispatchers.Default) {
-        if (bitmap == null) return@withContext ComposeColor.Gray
-        
-        try {
-            val palette = Palette.from(bitmap).generate()
-            val mutedColor = palette.getMutedColor(Color.GRAY)
-            ComposeColor(mutedColor)
+    fun extractMutedColor(bitmap: Bitmap?, @ColorInt fallbackColor: Int = Color.GRAY): Int {
+        return try {
+            bitmap?.let {
+                val palette = Palette.from(it).generate()
+                palette.getMutedColor(fallbackColor)
+            } ?: fallbackColor
         } catch (e: Exception) {
-            ComposeColor.Gray
+            fallbackColor
         }
     }
-    
+
     /**
-     * Create dynamic color scheme from extracted color
+     * Get appropriate text color (black or white) based on background color
      */
-    suspend fun createDynamicColorScheme(
-        bitmap: Bitmap?,
-        isDark: Boolean = false
-    ): ColorScheme = withContext(Dispatchers.Default) {
-        if (bitmap == null) {
-            return@withContext if (isDark) darkColorScheme() else lightColorScheme()
-        }
-        
-        try {
-            val palette = Palette.from(bitmap).generate()
-            
-            val primary = ComposeColor(palette.getVibrantColor(Color.BLUE))
-            val primaryVariant = ComposeColor(palette.getDarkVibrantColor(Color.BLUE))
-            val secondary = ComposeColor(palette.getMutedColor(Color.GREEN))
-            val background = if (isDark) ComposeColor.Black else ComposeColor.White
-            val surface = if (isDark) ComposeColor(0xFF121212) else ComposeColor.White
-            val onPrimary = if (primary.isDark()) ComposeColor.White else ComposeColor.Black
-            val onSecondary = if (secondary.isDark()) ComposeColor.White else ComposeColor.Black
-            val onBackground = if (isDark) ComposeColor.White else ComposeColor.Black
-            val onSurface = if (isDark) ComposeColor.White else ComposeColor.Black
-            
-            if (isDark) {
-                darkColorScheme(
-                    primary = primary,
-                    secondary = secondary,
-                    background = background,
-                    surface = surface,
-                    onPrimary = onPrimary,
-                    onSecondary = onSecondary,
-                    onBackground = onBackground,
-                    onSurface = onSurface
-                )
-            } else {
-                lightColorScheme(
-                    primary = primary,
-                    secondary = secondary,
-                    background = background,
-                    surface = surface,
-                    onPrimary = onPrimary,
-                    onSecondary = onSecondary,
-                    onBackground = onBackground,
-                    onSurface = onSurface
-                )
-            }
-        } catch (e: Exception) {
-            if (isDark) darkColorScheme() else lightColorScheme()
-        }
+    @ColorInt
+    fun getContrastColor(@ColorInt backgroundColor: Int): Int {
+        val luminance = calculateLuminance(backgroundColor)
+        return if (luminance > 0.5) Color.BLACK else Color.WHITE
     }
-    
+
+    /**
+     * Calculate luminance of a color
+     */
+    private fun calculateLuminance(@ColorInt color: Int): Double {
+        val red = Color.red(color) / 255.0
+        val green = Color.green(color) / 255.0
+        val blue = Color.blue(color) / 255.0
+
+        val r = if (red <= 0.03928) red / 12.92 else ((red + 0.055) / 1.055).pow(2.4)
+        val g = if (green <= 0.03928) green / 12.92 else ((green + 0.055) / 1.055).pow(2.4)
+        val b = if (blue <= 0.03928) blue / 12.92 else ((blue + 0.055) / 1.055).pow(2.4)
+
+        return 0.2126 * r + 0.7152 * g + 0.0722 * b
+    }
+
+    /**
+     * Darken a color by a percentage
+     */
+    @ColorInt
+    fun darkenColor(@ColorInt color: Int, factor: Float): Int {
+        val clampedFactor = factor.coerceIn(0f, 1f)
+        val a = Color.alpha(color)
+        val r = (Color.red(color) * (1 - clampedFactor)).roundToInt()
+        val g = (Color.green(color) * (1 - clampedFactor)).roundToInt()
+        val b = (Color.blue(color) * (1 - clampedFactor)).roundToInt()
+        return Color.argb(a, r, g, b)
+    }
+
+    /**
+     * Lighten a color by a percentage
+     */
+    @ColorInt
+    fun lightenColor(@ColorInt color: Int, factor: Float): Int {
+        val clampedFactor = factor.coerceIn(0f, 1f)
+        val a = Color.alpha(color)
+        val r = (Color.red(color) + (255 - Color.red(color)) * clampedFactor).roundToInt()
+        val g = (Color.green(color) + (255 - Color.green(color)) * clampedFactor).roundToInt()
+        val b = (Color.blue(color) + (255 - Color.blue(color)) * clampedFactor).roundToInt()
+        return Color.argb(a, r, g, b)
+    }
+
+    /**
+     * Adjust color alpha
+     */
+    @ColorInt
+    fun adjustAlpha(@ColorInt color: Int, alpha: Float): Int {
+        val clampedAlpha = (alpha * 255).roundToInt().coerceIn(0, 255)
+        return Color.argb(clampedAlpha, Color.red(color), Color.green(color), Color.blue(color))
+    }
+
+    /**
+     * Check if color is light
+     */
+    fun isColorLight(@ColorInt color: Int): Boolean {
+        val luminance = calculateLuminance(color)
+        return luminance > 0.5
+    }
+
     /**
      * Check if color is dark
      */
-    fun ComposeColor.isDark(): Boolean {
-        return ColorUtils.calculateLuminance(this.toArgb()) < 0.5
+    fun isColorDark(@ColorInt color: Int): Boolean {
+        return !isColorLight(color)
     }
-    
+
     /**
-     * Get contrasting color (black or white)
+     * Convert hex string to color int
      */
-    fun ComposeColor.getContrastingColor(): ComposeColor {
-        return if (isDark()) ComposeColor.White else ComposeColor.Black
+    @ColorInt
+    fun parseColor(colorString: String): Int {
+        return try {
+            Color.parseColor(colorString)
+        } catch (e: IllegalArgumentException) {
+            Color.GRAY
+        }
     }
-    
+
     /**
-     * Darken color by specified factor
+     * Convert color int to hex string
      */
-    fun ComposeColor.darken(factor: Float = 0.2f): ComposeColor {
-        return ComposeColor(
-            red = max(0f, red - factor),
-            green = max(0f, green - factor),
-            blue = max(0f, blue - factor),
-            alpha = alpha
-        )
+    fun colorToHex(@ColorInt color: Int): String {
+        return String.format("#%06X", 0xFFFFFF and color)
     }
-    
-    /**
-     * Lighten color by specified factor
-     */
-    fun ComposeColor.lighten(factor: Float = 0.2f): ComposeColor {
-        return ComposeColor(
-            red = min(1f, red + factor),
-            green = min(1f, green + factor),
-            blue = min(1f, blue + factor),
-            alpha = alpha
-        )
-    }
-    
+
     /**
      * Blend two colors
      */
-    fun blendColors(color1: ComposeColor, color2: ComposeColor, ratio: Float): ComposeColor {
-        val normalizedRatio = ratio.coerceIn(0f, 1f)
-        val inverseRatio = 1f - normalizedRatio
-        
-        return ComposeColor(
-            red = color1.red * inverseRatio + color2.red * normalizedRatio,
-            green = color1.green * inverseRatio + color2.green * normalizedRatio,
-            blue = color1.blue * inverseRatio + color2.blue * normalizedRatio,
-            alpha = color1.alpha * inverseRatio + color2.alpha * normalizedRatio
-        )
+    @ColorInt
+    fun blendColors(@ColorInt color1: Int, @ColorInt color2: Int, ratio: Float): Int {
+        val clampedRatio = ratio.coerceIn(0f, 1f)
+        val inverseRatio = 1f - clampedRatio
+
+        val a = (Color.alpha(color1) * inverseRatio + Color.alpha(color2) * clampedRatio).roundToInt()
+        val r = (Color.red(color1) * inverseRatio + Color.red(color2) * clampedRatio).roundToInt()
+        val g = (Color.green(color1) * inverseRatio + Color.green(color2) * clampedRatio).roundToInt()
+        val b = (Color.blue(color1) * inverseRatio + Color.blue(color2) * clampedRatio).roundToInt()
+
+        return Color.argb(a, r, g, b)
     }
-    
+
     /**
-     * Generate gradient colors from base color
+     * Generate gradient colors for visualizer
      */
-    fun generateGradientColors(baseColor: ComposeColor): List<ComposeColor> {
-        return listOf(
-            baseColor.lighten(0.3f),
-            baseColor,
-            baseColor.darken(0.3f)
-        )
+    fun generateGradientColors(@ColorInt baseColor: Int, steps: Int): List<Int> {
+        val colors = mutableListOf<Int>()
+        for (i in 0 until steps) {
+            val factor = i.toFloat() / (steps - 1)
+            val blendedColor = blendColors(baseColor, Color.WHITE, factor * 0.3f)
+            colors.add(blendedColor)
+        }
+        return colors
     }
-    
+
     /**
-     * Get material design color variations
+     * Create material design color palette from primary color
      */
-    fun getMaterialColorVariations(baseColor: ComposeColor): MaterialColorPalette {
-        val base = baseColor.toArgb()
-        
-        return MaterialColorPalette(
-            color50 = ComposeColor(ColorUtils.blendARGB(base, Color.WHITE, 0.95f)),
-            color100 = ComposeColor(ColorUtils.blendARGB(base, Color.WHITE, 0.9f)),
-            color200 = ComposeColor(ColorUtils.blendARGB(base, Color.WHITE, 0.8f)),
-            color300 = ComposeColor(ColorUtils.blendARGB(base, Color.WHITE, 0.6f)),
-            color400 = ComposeColor(ColorUtils.blendARGB(base, Color.WHITE, 0.4f)),
-            color500 = baseColor,
-            color600 = ComposeColor(ColorUtils.blendARGB(base, Color.BLACK, 0.15f)),
-            color700 = ComposeColor(ColorUtils.blendARGB(base, Color.BLACK, 0.3f)),
-            color800 = ComposeColor(ColorUtils.blendARGB(base, Color.BLACK, 0.45f)),
-            color900 = ComposeColor(ColorUtils.blendARGB(base, Color.BLACK, 0.6f))
-        )
-    }
-    
-    /**
-     * Calculate color distance
-     */
-    fun calculateColorDistance(color1: ComposeColor, color2: ComposeColor): Float {
-        val r1 = color1.red * 255
-        val g1 = color1.green * 255
-        val b1 = color1.blue * 255
-        
-        val r2 = color2.red * 255
-        val g2 = color2.green * 255
-        val b2 = color2.blue * 255
-        
-        val deltaR = r1 - r2
-        val deltaG = g1 - g2
-        val deltaB = b1 - b2
-        
-        return kotlin.math.sqrt(deltaR * deltaR + deltaG * deltaG + deltaB * deltaB)
-    }
-    
     data class MaterialColorPalette(
-        val color50: ComposeColor,
-        val color100: ComposeColor,
-        val color200: ComposeColor,
-        val color300: ComposeColor,
-        val color400: ComposeColor,
-        val color500: ComposeColor,
-        val color600: ComposeColor,
-        val color700: ComposeColor,
-        val color800: ComposeColor,
-        val color900: ComposeColor
+        @ColorInt val primary: Int,
+        @ColorInt val primaryVariant: Int,
+        @ColorInt val primaryContainer: Int,
+        @ColorInt val onPrimary: Int,
+        @ColorInt val onPrimaryContainer: Int
     )
+
+    fun createMaterialPalette(@ColorInt primaryColor: Int): MaterialColorPalette {
+        return MaterialColorPalette(
+            primary = primaryColor,
+            primaryVariant = darkenColor(primaryColor, 0.2f),
+            primaryContainer = lightenColor(primaryColor, 0.8f),
+            onPrimary = getContrastColor(primaryColor),
+            onPrimaryContainer = getContrastColor(lightenColor(primaryColor, 0.8f))
+        )
+    }
 }

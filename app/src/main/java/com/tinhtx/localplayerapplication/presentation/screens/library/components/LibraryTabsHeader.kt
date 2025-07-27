@@ -1,138 +1,145 @@
 package com.tinhtx.localplayerapplication.presentation.screens.library.components
 
-import androidx.compose.animation.*
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.tinhtx.localplayerapplication.presentation.screens.library.LibraryTab
+import com.tinhtx.localplayerapplication.presentation.screens.library.LibraryViewMode
 
 @Composable
 fun LibraryTabsHeader(
-    selectedTabIndex: Int,
-    onTabClick: (Int) -> Unit,
-    tabCounts: Map<LibraryTab, Int>,
+    selectedTab: LibraryTab,
+    onTabSelected: (LibraryTab) -> Unit,
+    viewMode: LibraryViewMode,
+    onViewModeChanged: (LibraryViewMode) -> Unit,
+    onSortClick: () -> Unit,
+    onFilterClick: () -> Unit,
+    onScanClick: () -> Unit,
+    isScanning: Boolean,
     modifier: Modifier = Modifier
 ) {
-    Card(
-        modifier = modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
-        ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-    ) {
-        ScrollableTabRow(
-            selectedTabIndex = selectedTabIndex,
-            modifier = Modifier.fillMaxWidth(),
-            containerColor = Color.Transparent,
-            contentColor = MaterialTheme.colorScheme.onSurface,
-            indicator = { tabPositions ->
-                if (tabPositions.isNotEmpty() && selectedTabIndex < tabPositions.size) {
-                    TabRowDefaults.SecondaryIndicator(
-                        modifier = Modifier.tabIndicatorOffset(tabPositions[selectedTabIndex]),
-                        color = MaterialTheme.colorScheme.primary,
-                        height = 3.dp
+    Column(modifier = modifier) {
+        // Top row với actions
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "Music Library",
+                style = MaterialTheme.typography.headlineMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                // View mode toggle
+                IconButton(
+                    onClick = {
+                        val nextMode = when (viewMode) {
+                            LibraryViewMode.LIST -> LibraryViewMode.GRID
+                            LibraryViewMode.GRID -> LibraryViewMode.DETAILED_LIST
+                            LibraryViewMode.DETAILED_LIST -> LibraryViewMode.LIST
+                        }
+                        onViewModeChanged(nextMode)
+                    }
+                ) {
+                    Icon(
+                        imageVector = when (viewMode) {
+                            LibraryViewMode.LIST -> Icons.Default.List
+                            LibraryViewMode.GRID -> Icons.Default.GridView
+                            LibraryViewMode.DETAILED_LIST -> Icons.Default.ViewList
+                        },
+                        contentDescription = "Change view mode",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-            },
-            divider = {}
-        ) {
-            LibraryTab.entries.forEachIndexed { index, tab ->
-                val isSelected = index == selectedTabIndex
-                val count = tabCounts[tab] ?: 0
                 
-                Tab(
-                    selected = isSelected,
-                    onClick = { onTabClick(index) },
-                    modifier = Modifier.padding(vertical = 8.dp)
+                // Sort button
+                IconButton(onClick = onSortClick) {
+                    Icon(
+                        imageVector = Icons.Default.Sort,
+                        contentDescription = "Sort options",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                
+                // Filter button
+                IconButton(onClick = onFilterClick) {
+                    Icon(
+                        imageVector = Icons.Default.FilterList,
+                        contentDescription = "Filter options",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                
+                // Scan button
+                IconButton(
+                    onClick = onScanClick,
+                    enabled = !isScanning
                 ) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center,
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
-                    ) {
-                        Text(
-                            text = tab.displayName,
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                            color = if (isSelected) {
-                                MaterialTheme.colorScheme.primary
-                            } else {
-                                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
-                            }
+                    if (isScanning) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(20.dp),
+                            strokeWidth = 2.dp,
+                            color = MaterialTheme.colorScheme.primary
                         )
-                        
-                        Spacer(modifier = Modifier.height(2.dp))
-                        
-                        AnimatedContent(
-                            targetState = count,
-                            transitionSpec = {
-                                slideInVertically { it } + fadeIn() with
-                                slideOutVertically { -it } + fadeOut()
-                            },
-                            label = "count_animation"
-                        ) { animatedCount ->
-                            Text(
-                                text = animatedCount.toString(),
-                                style = MaterialTheme.typography.labelSmall,
-                                color = if (isSelected) {
-                                    MaterialTheme.colorScheme.primary.copy(alpha = 0.8f)
-                                } else {
-                                    MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-                                }
-                            )
-                        }
+                    } else {
+                        Icon(
+                            imageVector = Icons.Default.Refresh,
+                            contentDescription = "Scan library",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
                 }
             }
         }
-    }
-}
-
-@Composable
-fun CompactLibraryTabsHeader(
-    selectedTabIndex: Int,
-    onTabClick: (Int) -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp),
-        horizontalArrangement = Arrangement.SpaceEvenly
-    ) {
-        LibraryTab.entries.forEachIndexed { index, tab ->
-            val isSelected = index == selectedTabIndex
-            
-            FilterChip(
-                selected = isSelected,
-                onClick = { onTabClick(index) },
-                label = {
-                    Text(
-                        text = tab.displayName,
-                        style = MaterialTheme.typography.labelMedium
-                    )
-                },
-                leadingIcon = {
-                    Icon(
-                        imageVector = tab.icon,
-                        contentDescription = null,
-                        modifier = Modifier.size(16.dp)
-                    )
-                },
-                colors = FilterChipDefaults.filterChipColors(
-                    selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
-                    selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
+        
+        // Tabs row
+        ScrollableTabRow(
+            selectedTabIndex = selectedTab.ordinal,
+            modifier = Modifier.fillMaxWidth(),
+            containerColor = MaterialTheme.colorScheme.surface,
+            contentColor = MaterialTheme.colorScheme.onSurface,
+            edgePadding = 16.dp
+        ) {
+            LibraryTab.values().forEach { tab ->
+                Tab(
+                    selected = selectedTab == tab,
+                    onClick = { onTabSelected(tab) },
+                    text = {
+                        Text(
+                            text = tab.displayName,
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = if (selectedTab == tab) FontWeight.SemiBold else FontWeight.Normal
+                        )
+                    },
+                    icon = {
+                        Icon(
+                            imageVector = when (tab) {
+                                LibraryTab.SONGS -> Icons.Default.MusicNote
+                                LibraryTab.ALBUMS -> Icons.Default.Album
+                                LibraryTab.ARTISTS -> Icons.Default.Person
+                                LibraryTab.PLAYLISTS -> Icons.Default.PlaylistPlay
+                                LibraryTab.GENRES -> Icons.Default.Category
+                            },
+                            contentDescription = null,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
                 )
-            )
+            }
         }
     }
 }

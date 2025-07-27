@@ -1,199 +1,451 @@
 package com.tinhtx.localplayerapplication.presentation.components.music
 
+import androidx.compose.animation.*
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import coil.compose.AsyncImage
-import coil.request.ImageRequest
 import com.tinhtx.localplayerapplication.domain.model.Artist
+import com.tinhtx.localplayerapplication.presentation.components.image.CircularArtistImage
 
 @Composable
 fun ArtistCard(
     artist: Artist,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
-    showStats: Boolean = true
+    onPlayClick: (() -> Unit)? = null,
+    onMoreClick: (() -> Unit)? = null,
+    showDetails: Boolean = true,
+    isCompact: Boolean = false,
+    isSelected: Boolean = false
+) {
+    if (isCompact) {
+        ArtistCardCompact(
+            artist = artist,
+            onClick = onClick,
+            onPlayClick = onPlayClick,
+            isSelected = isSelected,
+            modifier = modifier
+        )
+    } else {
+        ArtistCardFull(
+            artist = artist,
+            onClick = onClick,
+            onPlayClick = onPlayClick,
+            onMoreClick = onMoreClick,
+            showDetails = showDetails,
+            isSelected = isSelected,
+            modifier = modifier
+        )
+    }
+}
+
+@Composable
+private fun ArtistCardFull(
+    artist: Artist,
+    onClick: () -> Unit,
+    onPlayClick: (() -> Unit)?,
+    onMoreClick: (() -> Unit)?,
+    showDetails: Boolean,
+    isSelected: Boolean,
+    modifier: Modifier = Modifier
 ) {
     Card(
-        modifier = modifier
-            .clickable { onClick() }
-            .aspectRatio(0.8f),
-        shape = RoundedCornerShape(12.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+        onClick = onClick,
+        modifier = modifier,
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
-        )
+            containerColor = if (isSelected) {
+                MaterialTheme.colorScheme.primaryContainer
+            } else {
+                MaterialTheme.colorScheme.surface
+            }
+        ),
+        elevation = CardDefaults.cardElevation(
+            defaultElevation = if (isSelected) 4.dp else 2.dp
+        ),
+        border = if (isSelected) {
+            androidx.compose.foundation.BorderStroke(2.dp, MaterialTheme.colorScheme.primary)
+        } else null
     ) {
         Column(
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Artist image with circular crop
+            // Artist image
             Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f)
-                    .padding(16.dp),
                 contentAlignment = Alignment.Center
             ) {
-                AsyncImage(
-                    model = ImageRequest.Builder(LocalContext.current)
-                        .data(artist.artistArtPath)
-                        .crossfade(true)
-                        .build(),
-                    contentDescription = "Artist photo for ${artist.displayName}",
-                    modifier = Modifier
-                        .size(120.dp)
-                        .clip(CircleShape),
-                    contentScale = ContentScale.Crop,
-                    error = {
-                        Box(
-                            modifier = Modifier
-                                .size(120.dp)
-                                .clip(CircleShape)
-                                .background(
-                                    brush = Brush.radialGradient(
-                                        colors = listOf(
-                                            MaterialTheme.colorScheme.primaryContainer,
-                                            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f)
-                                        )
-                                    )
-                                ),
-                            contentAlignment = Alignment.Center
+                CircularArtistImage(
+                    imageUrl = artist.imagePath,
+                    artistName = artist.name,
+                    size = 120.dp,
+                    isSelected = isSelected,
+                    showBorder = true
+                )
+                
+                // Play button overlay
+                if (onPlayClick != null) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .offset((-8).dp, (-8).dp)
+                    ) {
+                        FloatingActionButton(
+                            onClick = onPlayClick,
+                            modifier = Modifier.size(36.dp),
+                            containerColor = MaterialTheme.colorScheme.primary,
+                            contentColor = MaterialTheme.colorScheme.onPrimary
                         ) {
                             Icon(
-                                imageVector = Icons.Default.Person,
-                                contentDescription = null,
-                                modifier = Modifier.size(48.dp),
-                                tint = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.6f)
+                                imageVector = Icons.Default.PlayArrow,
+                                contentDescription = "Play artist",
+                                modifier = Modifier.size(18.dp)
                             )
                         }
                     }
-                )
-            }
-
-            // Artist info
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 12.dp, vertical = 16.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Text(
-                    text = artist.displayName,
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    textAlign = TextAlign.Center
-                )
-
-                if (showStats) {
-                    Spacer(modifier = Modifier.height(4.dp))
-
-                    Text(
-                        text = artist.summaryText,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
-                        textAlign = TextAlign.Center,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
                 }
             }
-        }
-    }
-}
-
-@Composable
-fun HorizontalArtistCard(
-    artist: Artist,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Card(
-        modifier = modifier
-            .clickable { onClick() }
-            .height(80.dp),
-        shape = RoundedCornerShape(12.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
-        )
-    ) {
-        Row(
-            modifier = Modifier.fillMaxSize(),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            // Artist image
-            AsyncImage(
-                model = ImageRequest.Builder(LocalContext.current)
-                    .data(artist.artistArtPath)
-                    .crossfade(true)
-                    .build(),
-                contentDescription = "Artist photo",
-                modifier = Modifier
-                    .size(64.dp)
-                    .padding(8.dp)
-                    .clip(CircleShape),
-                contentScale = ContentScale.Crop,
-                error = {
-                    Box(
-                        modifier = Modifier
-                            .size(64.dp)
-                            .padding(8.dp)
-                            .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.surfaceVariant),
-                        contentAlignment = Alignment.Center
+            
+            if (showDetails) {
+                Spacer(modifier = Modifier.height(12.dp))
+                
+                // Artist name
+                Text(
+                    text = artist.name,
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = if (isSelected) {
+                        MaterialTheme.colorScheme.onPrimaryContainer
+                    } else {
+                        MaterialTheme.colorScheme.onSurface
+                    },
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                )
+                
+                Spacer(modifier = Modifier.height(4.dp))
+                
+                // Artist stats
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "${artist.songCount} songs",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = if (isSelected) {
+                            MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        }
+                    )
+                    
+                    Text(
+                        text = "•",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = if (isSelected) {
+                            MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.5f)
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                        }
+                    )
+                    
+                    Text(
+                        text = "${artist.albumCount} albums",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = if (isSelected) {
+                            MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        }
+                    )
+                }
+                
+                // More options button
+                if (onMoreClick != null) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    
+                    IconButton(
+                        onClick = onMoreClick
                     ) {
                         Icon(
-                            imageVector = Icons.Default.Person,
-                            contentDescription = null,
-                            modifier = Modifier.size(24.dp),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                            imageVector = Icons.Default.MoreVert,
+                            contentDescription = "More options",
+                            tint = if (isSelected) {
+                                MaterialTheme.colorScheme.onPrimaryContainer
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            }
                         )
                     }
                 }
-            )
+            }
+        }
+    }
+}
 
+@Composable
+private fun ArtistCardCompact(
+    artist: Artist,
+    onClick: () -> Unit,
+    onPlayClick: (() -> Unit)?,
+    isSelected: Boolean,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        onClick = onClick,
+        modifier = modifier,
+        colors = CardDefaults.cardColors(
+            containerColor = if (isSelected) {
+                MaterialTheme.colorScheme.primaryContainer
+            } else {
+                MaterialTheme.colorScheme.surface
+            }
+        ),
+        elevation = CardDefaults.cardElevation(
+            defaultElevation = if (isSelected) 4.dp else 1.dp
+        )
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Artist image
+            CircularArtistImage(
+                imageUrl = artist.imagePath,
+                artistName = artist.name,
+                size = 56.dp,
+                isSelected = isSelected,
+                showBorder = isSelected
+            )
+            
+            Spacer(modifier = Modifier.width(12.dp))
+            
             // Artist info
             Column(
-                modifier = Modifier
-                    .fillMaxHeight()
-                    .weight(1f)
-                    .padding(vertical = 12.dp, horizontal = 8.dp),
-                verticalArrangement = Arrangement.Center
+                modifier = Modifier.weight(1f)
             ) {
                 Text(
-                    text = artist.displayName,
-                    style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.onSurface,
+                    text = artist.name,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = if (isSelected) {
+                        MaterialTheme.colorScheme.onPrimaryContainer
+                    } else {
+                        MaterialTheme.colorScheme.onSurface
+                    },
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
-
+                
                 Spacer(modifier = Modifier.height(2.dp))
-
+                
                 Text(
-                    text = artist.summaryText,
+                    text = "${artist.songCount} songs • ${artist.albumCount} albums",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = if (isSelected) {
+                        MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            
+            // Play button
+            if (onPlayClick != null) {
+                IconButton(
+                    onClick = onPlayClick,
+                    modifier = Modifier.size(40.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.PlayArrow,
+                        contentDescription = "Play artist",
+                        tint = if (isSelected) {
+                            MaterialTheme.colorScheme.onPrimaryContainer
+                        } else {
+                            MaterialTheme.colorScheme.primary
+                        },
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun ArtistCardGrid(
+    artist: Artist,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    onPlayClick: (() -> Unit)? = null,
+    aspectRatio: Float = 0.8f
+) {
+    Card(
+        onClick = onClick,
+        modifier = modifier.aspectRatio(aspectRatio),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Box(
+            modifier = Modifier.fillMaxSize()
+        ) {
+            // Background gradient
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.verticalGradient(
+                            colors = listOf(
+                                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f),
+                                MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f)
+                            )
+                        )
+                    )
+            )
+            
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(16.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                // Artist image
+                CircularArtistImage(
+                    imageUrl = artist.imagePath,
+                    artistName = artist.name,
+                    size = 80.dp,
+                    showBorder = true
+                )
+                
+                Spacer(modifier = Modifier.height(12.dp))
+                
+                // Artist name
+                Text(
+                    text = artist.name,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                )
+                
+                Spacer(modifier = Modifier.height(4.dp))
+                
+                Text(
+                    text = "${artist.songCount} songs",
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                )
+            }
+            
+            // Play button
+            if (onPlayClick != null) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(12.dp)
+                ) {
+                    FloatingActionButton(
+                        onClick = onPlayClick,
+                        modifier = Modifier.size(40.dp),
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        contentColor = MaterialTheme.colorScheme.onPrimary
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.PlayArrow,
+                            contentDescription = "Play artist",
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun ArtistCardMinimal(
+    artist: Artist,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    isSelected: Boolean = false
+) {
+    Card(
+        onClick = onClick,
+        modifier = modifier,
+        colors = CardDefaults.cardColors(
+            containerColor = if (isSelected) {
+                MaterialTheme.colorScheme.primaryContainer
+            } else {
+                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+            }
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Small artist image
+            CircularArtistImage(
+                imageUrl = artist.imagePath,
+                artistName = artist.name,
+                size = 32.dp,
+                isSelected = isSelected
+            )
+            
+            Spacer(modifier = Modifier.width(8.dp))
+            
+            // Artist info
+            Column(
+                modifier = Modifier.weight(1f)
+            ) {
+                Text(
+                    text = artist.name,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    color = if (isSelected) {
+                        MaterialTheme.colorScheme.onPrimaryContainer
+                    } else {
+                        MaterialTheme.colorScheme.onSurface
+                    }
+                )
+                
+                Text(
+                    text = "${artist.songCount} songs",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (isSelected) {
+                        MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -203,68 +455,106 @@ fun HorizontalArtistCard(
 }
 
 @Composable
-fun CompactArtistItem(
+fun TopArtistCard(
     artist: Artist,
+    rank: Int,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onPlayClick: (() -> Unit)? = null
 ) {
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .clickable { onClick() }
-            .padding(horizontal = 16.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically
+    Card(
+        onClick = onClick,
+        modifier = modifier,
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
     ) {
-        // Artist image
-        AsyncImage(
-            model = ImageRequest.Builder(LocalContext.current)
-                .data(artist.artistArtPath)
-                .crossfade(true)
-                .build(),
-            contentDescription = "Artist photo",
+        Row(
             modifier = Modifier
-                .size(40.dp)
-                .clip(CircleShape),
-            contentScale = ContentScale.Crop,
-            error = {
-                Box(
-                    modifier = Modifier
-                        .size(40.dp)
-                        .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.surfaceVariant),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Person,
-                        contentDescription = null,
-                        modifier = Modifier.size(20.dp),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Rank
+            Box(
+                modifier = Modifier
+                    .size(32.dp)
+                    .background(
+                        when (rank) {
+                            1 -> androidx.compose.ui.graphics.Color(0xFFFFD700) // Gold
+                            2 -> androidx.compose.ui.graphics.Color(0xFFC0C0C0) // Silver
+                            3 -> androidx.compose.ui.graphics.Color(0xFFCD7F32) // Bronze
+                            else -> MaterialTheme.colorScheme.primary
+                        },
+                        CircleShape
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = rank.toString(),
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = androidx.compose.ui.graphics.Color.White
+                )
+            }
+            
+            Spacer(modifier = Modifier.width(12.dp))
+            
+            // Artist image
+            CircularArtistImage(
+                imageUrl = artist.imagePath,
+                artistName = artist.name,
+                size = 64.dp,
+                showBorder = true
+            )
+            
+            Spacer(modifier = Modifier.width(12.dp))
+            
+            // Artist info
+            Column(
+                modifier = Modifier.weight(1f)
+            ) {
+                Text(
+                    text = artist.name,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                
+                Text(
+                    text = "${artist.songCount} songs • ${artist.albumCount} albums",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                
+                // Additional stats if available
+                if (artist.playCount > 0) {
+                    Text(
+                        text = "${artist.playCount} plays",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
                     )
                 }
             }
-        )
-
-        Spacer(modifier = Modifier.width(12.dp))
-
-        // Artist info
-        Column(
-            modifier = Modifier.weight(1f)
-        ) {
-            Text(
-                text = artist.displayName,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-
-            Text(
-                text = artist.summaryText,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
+            
+            // Play button
+            if (onPlayClick != null) {
+                IconButton(
+                    onClick = onPlayClick,
+                    modifier = Modifier.size(48.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.PlayArrow,
+                        contentDescription = "Play artist",
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(28.dp)
+                    )
+                }
+            }
         }
     }
 }

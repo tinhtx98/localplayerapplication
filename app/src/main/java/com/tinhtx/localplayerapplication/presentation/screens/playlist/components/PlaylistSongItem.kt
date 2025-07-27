@@ -1,48 +1,56 @@
 package com.tinhtx.localplayerapplication.presentation.screens.playlist.components
 
-import androidx.compose.animation.*
-import androidx.compose.foundation.background
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.tinhtx.localplayerapplication.domain.model.Song
-import com.tinhtx.localplayerapplication.presentation.components.image.AlbumArtImage
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun PlaylistSongItem(
     song: Song,
-    position: Int,
+    index: Int,
+    isSelected: Boolean,
+    isFavorite: Boolean,
+    isCurrentlyPlaying: Boolean,
+    isPlaying: Boolean,
+    isSelectionMode: Boolean,
+    canReorder: Boolean,
     onClick: () -> Unit,
-    onFavoriteClick: () -> Unit,
-    onRemoveFromPlaylistClick: () -> Unit,
-    modifier: Modifier = Modifier,
-    showPosition: Boolean = true,
-    isPlaying: Boolean = false
+    onLongClick: () -> Unit,
+    onToggleSelection: () -> Unit,
+    onToggleFavorite: () -> Unit,
+    onMoreClick: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
-    var showRemoveConfirmation by remember { mutableStateOf(false) }
-
     Card(
-        onClick = onClick,
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier
+            .combinedClickable(
+                onClick = if (isSelectionMode) onToggleSelection else onClick,
+                onLongClick = onLongClick
+            ),
         colors = CardDefaults.cardColors(
-            containerColor = if (isPlaying) {
-                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
-            } else {
-                MaterialTheme.colorScheme.surface
+            containerColor = when {
+                isSelected -> MaterialTheme.colorScheme.primaryContainer
+                isCurrentlyPlaying -> MaterialTheme.colorScheme.secondaryContainer
+                else -> MaterialTheme.colorScheme.surface
             }
         ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        elevation = CardDefaults.cardElevation(
+            defaultElevation = when {
+                isSelected || isCurrentlyPlaying -> 4.dp
+                else -> 1.dp
+            }
+        )
     ) {
         Row(
             modifier = Modifier
@@ -50,97 +58,101 @@ fun PlaylistSongItem(
                 .padding(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Position number or play indicator
-            if (showPosition) {
-                Box(
-                    modifier = Modifier
-                        .size(32.dp)
-                        .background(
-                            if (isPlaying) MaterialTheme.colorScheme.primary else Color.Transparent,
-                            CircleShape
-                        ),
-                    contentAlignment = Alignment.Center
-                ) {
-                    if (isPlaying) {
-                        Icon(
-                            imageVector = Icons.Default.PlayArrow,
-                            contentDescription = "Now playing",
-                            modifier = Modifier.size(16.dp),
-                            tint = MaterialTheme.colorScheme.onPrimary
+            // Drag handle, track number, selection checkbox, or playing indicator
+            Box(
+                modifier = Modifier.size(32.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                when {
+                    isSelectionMode -> {
+                        Checkbox(
+                            checked = isSelected,
+                            onCheckedChange = { onToggleSelection() },
+                            modifier = Modifier.size(20.dp)
                         )
-                    } else {
+                    }
+                    canReorder -> {
+                        Icon(
+                            imageVector = Icons.Default.DragHandle,
+                            contentDescription = "Drag to reorder",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                    isCurrentlyPlaying -> {
+                        Icon(
+                            imageVector = if (isPlaying) Icons.Default.Equalizer else Icons.Default.Pause,
+                            contentDescription = if (isPlaying) "Playing" else "Paused",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                    else -> {
                         Text(
-                            text = position.toString(),
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.Medium,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                            text = index.toString(),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
-
-                Spacer(modifier = Modifier.width(12.dp))
             }
-
-            // Album art
-            AlbumArtImage(
-                albumId = song.albumId,
-                contentDescription = "Album art for ${song.title}",
-                modifier = Modifier
-                    .size(48.dp)
-                    .clip(RoundedCornerShape(8.dp))
-            )
 
             Spacer(modifier = Modifier.width(12.dp))
 
-            // Song information
+            // Song info
             Column(
                 modifier = Modifier.weight(1f)
             ) {
                 Text(
                     text = song.title,
                     style = MaterialTheme.typography.titleSmall,
-                    color = if (isPlaying) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
-                    fontWeight = if (isPlaying) FontWeight.Bold else FontWeight.Normal,
+                    fontWeight = if (isCurrentlyPlaying) FontWeight.SemiBold else FontWeight.Medium,
                     maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                    overflow = TextOverflow.Ellipsis,
+                    color = if (isCurrentlyPlaying) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
                 )
 
                 Spacer(modifier = Modifier.height(2.dp))
 
                 Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = song.displayArtist,
+                        text = song.artist,
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f, fill = false)
+                        overflow = TextOverflow.Ellipsis
                     )
 
-                    if (song.displayAlbum.isNotBlank() && song.displayAlbum != "Unknown Album") {
-                        Text(
-                            text = " • ${song.displayAlbum}",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
+                    Text(
+                        text = "•",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                    )
+
+                    Text(
+                        text = song.album,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+
+                    Text(
+                        text = "•",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                    )
+
+                    Text(
+                        text = formatDuration(song.duration),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
+                    )
                 }
             }
-
-            Spacer(modifier = Modifier.width(8.dp))
-
-            // Duration
-            Text(
-                text = song.formattedDuration,
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-            )
-
-            Spacer(modifier = Modifier.width(8.dp))
 
             // Action buttons
             Row(
@@ -148,66 +160,37 @@ fun PlaylistSongItem(
             ) {
                 // Favorite button
                 IconButton(
-                    onClick = onFavoriteClick,
-                    modifier = Modifier.size(32.dp)
-                ) {
-                    AnimatedContent(
-                        targetState = song.isFavorite,
-                        transitionSpec = {
-                            scaleIn() + fadeIn() with scaleOut() + fadeOut()
-                        },
-                        label = "favorite_animation"
-                    ) { isFavorite ->
-                        Icon(
-                            imageVector = if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                            contentDescription = if (isFavorite) "Remove from favorites" else "Add to favorites",
-                            modifier = Modifier.size(18.dp),
-                            tint = if (isFavorite) Color.Red else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                        )
-                    }
-                }
-
-                // Remove from playlist button
-                IconButton(
-                    onClick = { showRemoveConfirmation = true },
+                    onClick = onToggleFavorite,
                     modifier = Modifier.size(32.dp)
                 ) {
                     Icon(
-                        imageVector = Icons.Default.RemoveCircleOutline,
-                        contentDescription = "Remove from playlist",
-                        modifier = Modifier.size(18.dp),
-                        tint = MaterialTheme.colorScheme.error.copy(alpha = 0.7f)
+                        imageVector = if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                        contentDescription = if (isFavorite) "Remove from favorites" else "Add to favorites",
+                        tint = if (isFavorite) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
+
+                // More options button
+                IconButton(
+                    onClick = onMoreClick,
+                    modifier = Modifier.size(32.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.MoreVert,
+                        contentDescription = "More options",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(16.dp)
                     )
                 }
             }
         }
     }
+}
 
-    // Remove confirmation dialog
-    if (showRemoveConfirmation) {
-        AlertDialog(
-            onDismissRequest = { showRemoveConfirmation = false },
-            title = {
-                Text("Remove from playlist?")
-            },
-            text = {
-                Text("\"${song.title}\" will be removed from this playlist.")
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        onRemoveFromPlaylistClick()
-                        showRemoveConfirmation = false
-                    }
-                ) {
-                    Text("Remove", color = MaterialTheme.colorScheme.error)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showRemoveConfirmation = false }) {
-                    Text("Cancel")
-                }
-            }
-        )
-    }
+private fun formatDuration(durationMs: Long): String {
+    val totalSeconds = durationMs / 1000
+    val minutes = totalSeconds / 60
+    val seconds = totalSeconds % 60
+    return String.format("%d:%02d", minutes, seconds)
 }

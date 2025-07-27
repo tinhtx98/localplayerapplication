@@ -2,9 +2,9 @@ package com.tinhtx.localplayerapplication.presentation.screens.player.components
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -12,36 +12,27 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
-import com.tinhtx.localplayerapplication.domain.model.EqualizerPreset
 
 @Composable
 fun EqualizerDialog(
-    currentPreset: EqualizerPreset,
-    onPresetChange: (EqualizerPreset) -> Unit,
+    enabled: Boolean,
+    preset: String,
+    bands: List<Float>,
     onDismiss: () -> Unit,
-    modifier: Modifier = Modifier
+    onApply: (Boolean, String, List<Float>) -> Unit
 ) {
-    val presets = remember {
-        listOf(
-            EqualizerPreset.NORMAL,
-            EqualizerPreset.ROCK,
-            EqualizerPreset.POP,
-            EqualizerPreset.JAZZ,
-            EqualizerPreset.CLASSICAL,
-            EqualizerPreset.BASS_BOOST,
-            EqualizerPreset.VOCAL_BOOST
-        )
-    }
+    var isEnabled by remember { mutableStateOf(enabled) }
+    var selectedPreset by remember { mutableStateOf(preset) }
+    var bandValues by remember { mutableStateOf(bands) }
+    
+    val presets = listOf("Normal", "Classical", "Dance", "Bass", "Loud", "Treble", "Party", "Pop", "Rock", "Custom")
+    val frequencies = listOf("60", "170", "310", "600", "1K", "3K", "6K", "12K", "14K", "16K")
 
     Dialog(onDismissRequest = onDismiss) {
         Card(
-            modifier = modifier
+            modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp),
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surface
-            ),
-            elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+                .padding(16.dp)
         ) {
             Column(
                 modifier = Modifier.padding(24.dp)
@@ -54,69 +45,111 @@ fun EqualizerDialog(
                 ) {
                     Text(
                         text = "Equalizer",
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.Bold
                     )
                     
                     IconButton(onClick = onDismiss) {
                         Icon(
                             imageVector = Icons.Default.Close,
-                            contentDescription = "Close equalizer"
+                            contentDescription = "Close"
                         )
                     }
                 }
                 
                 Spacer(modifier = Modifier.height(16.dp))
                 
-                // Equalizer visualization
-                EqualizerVisualization(
-                    preset = currentPreset,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(120.dp)
-                )
+                // Enable switch
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Enable Equalizer",
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                    
+                    Switch(
+                        checked = isEnabled,
+                        onCheckedChange = { isEnabled = it }
+                    )
+                }
                 
-                Spacer(modifier = Modifier.height(24.dp))
+                Spacer(modifier = Modifier.height(16.dp))
                 
+                // Preset selection
                 Text(
                     text = "Presets",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurface
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Medium
                 )
                 
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(8.dp))
                 
-                // Preset buttons
                 LazyRow(
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    items(presets) { preset ->
+                    items(presets) { presetName ->
                         FilterChip(
-                            selected = preset == currentPreset,
-                            onClick = { onPresetChange(preset) },
-                            label = {
-                                Text(
-                                    text = preset.displayName,
-                                    style = MaterialTheme.typography.labelMedium
-                                )
-                            },
-                            colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
-                                selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
-                            )
+                            onClick = { selectedPreset = presetName },
+                            label = { Text(presetName) },
+                            selected = selectedPreset == presetName
                         )
                     }
                 }
                 
+                Spacer(modifier = Modifier.height(24.dp))
+                
+                // Equalizer bands
+                Text(
+                    text = "Frequency Bands",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Medium
+                )
+                
                 Spacer(modifier = Modifier.height(16.dp))
                 
-                // Apply button
-                Button(
-                    onClick = onDismiss,
-                    modifier = Modifier.fillMaxWidth()
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceEvenly
                 ) {
-                    Text("Apply")
+                    frequencies.forEachIndexed { index, freq ->
+                        if (index < bandValues.size) {
+                            EqualizerBand(
+                                frequency = freq,
+                                value = bandValues[index],
+                                onValueChange = { newValue ->
+                                    bandValues = bandValues.toMutableList().apply {
+                                        set(index, newValue)
+                                    }
+                                },
+                                enabled = isEnabled
+                            )
+                        }
+                    }
+                }
+                
+                Spacer(modifier = Modifier.height(24.dp))
+                
+                // Action buttons
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    TextButton(onClick = onDismiss) {
+                        Text("Cancel")
+                    }
+                    
+                    Spacer(modifier = Modifier.width(8.dp))
+                    
+                    Button(
+                        onClick = {
+                            onApply(isEnabled, selectedPreset, bandValues)
+                        }
+                    ) {
+                        Text("Apply")
+                    }
                 }
             }
         }
@@ -124,89 +157,49 @@ fun EqualizerDialog(
 }
 
 @Composable
-private fun EqualizerVisualization(
-    preset: EqualizerPreset,
-    modifier: Modifier = Modifier
-) {
-    val bands = remember(preset) { getEqualizerBands(preset) }
-    
-    Row(
-        modifier = modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceEvenly,
-        verticalAlignment = Alignment.Bottom
-    ) {
-        bands.forEachIndexed { index, level ->
-            EqualizerBand(
-                frequency = getFrequencyLabel(index),
-                level = level,
-                modifier = Modifier.weight(1f)
-            )
-        }
-    }
-}
-
-@Composable
 private fun EqualizerBand(
     frequency: String,
-    level: Float,
+    value: Float,
+    onValueChange: (Float) -> Unit,
+    enabled: Boolean,
     modifier: Modifier = Modifier
 ) {
     Column(
         modifier = modifier,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        // Level indicator
-        Box(
-            modifier = Modifier
-                .width(24.dp)
-                .height(80.dp)
-        ) {
-            // Background bar
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(
-                        color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f),
-                        shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp)
-                    )
-            )
-            
-            // Level bar
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .fillMaxHeight(level.coerceIn(0f, 1f))
-                    .align(Alignment.BottomCenter)
-                    .background(
-                        color = MaterialTheme.colorScheme.primary,
-                        shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp)
-                    )
-            )
-        }
+        Text(
+            text = "+15",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
         
-        Spacer(modifier = Modifier.height(8.dp))
+        Slider(
+            value = value,
+            onValueChange = onValueChange,
+            valueRange = -15f..15f,
+            enabled = enabled,
+            modifier = Modifier
+                .height(120.dp)
+                .width(40.dp),
+            colors = SliderDefaults.colors(
+                thumbColor = MaterialTheme.colorScheme.primary,
+                activeTrackColor = MaterialTheme.colorScheme.primary
+            )
+        )
+        
+        Text(
+            text = "-15",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        
+        Spacer(modifier = Modifier.height(4.dp))
         
         Text(
             text = frequency,
             style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+            fontWeight = FontWeight.Medium
         )
     }
-}
-
-private fun getEqualizerBands(preset: EqualizerPreset): List<Float> {
-    return when (preset) {
-        EqualizerPreset.NORMAL -> listOf(0.5f, 0.5f, 0.5f, 0.5f, 0.5f, 0.5f, 0.5f, 0.5f)
-        EqualizerPreset.ROCK -> listOf(0.7f, 0.6f, 0.4f, 0.3f, 0.4f, 0.6f, 0.7f, 0.8f)
-        EqualizerPreset.POP -> listOf(0.4f, 0.6f, 0.7f, 0.6f, 0.5f, 0.4f, 0.5f, 0.6f)
-        EqualizerPreset.JAZZ -> listOf(0.6f, 0.5f, 0.4f, 0.6f, 0.7f, 0.6f, 0.5f, 0.4f)
-        EqualizerPreset.CLASSICAL -> listOf(0.7f, 0.6f, 0.5f, 0.6f, 0.7f, 0.8f, 0.7f, 0.6f)
-        EqualizerPreset.BASS_BOOST -> listOf(0.9f, 0.8f, 0.6f, 0.4f, 0.3f, 0.4f, 0.5f, 0.6f)
-        EqualizerPreset.VOCAL_BOOST -> listOf(0.3f, 0.4f, 0.6f, 0.8f, 0.7f, 0.6f, 0.4f, 0.3f)
-    }
-}
-
-private fun getFrequencyLabel(index: Int): String {
-    val frequencies = listOf("60", "170", "310", "600", "1K", "3K", "6K", "12K")
-    return frequencies.getOrElse(index) { "${index * 1000}" }
 }

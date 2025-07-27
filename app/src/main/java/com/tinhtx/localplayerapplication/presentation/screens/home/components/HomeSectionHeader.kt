@@ -1,20 +1,22 @@
 package com.tinhtx.localplayerapplication.presentation.screens.home.components
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowForward
+import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 
 @Composable
 fun HomeSectionHeader(
     title: String,
+    modifier: Modifier = Modifier,
     subtitle: String? = null,
-    onSeeAllClick: (() -> Unit)? = null,
-    modifier: Modifier = Modifier
+    onViewAllClick: (() -> Unit)? = null
 ) {
     Row(
         modifier = modifier.fillMaxWidth(),
@@ -24,57 +26,41 @@ fun HomeSectionHeader(
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = title,
-                style = MaterialTheme.typography.titleLarge,
-                color = MaterialTheme.colorScheme.onBackground
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface
             )
-            if (subtitle != null) {
+            
+            subtitle?.let {
                 Text(
-                    text = subtitle,
+                    text = it,
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f)
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         }
-
-        if (onSeeAllClick != null) {
-            TextButton(onClick = onSeeAllClick) {
+        
+        onViewAllClick?.let { onClick ->
+            Row(
+                modifier = Modifier
+                    .clickable { onClick() }
+                    .padding(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
                 Text(
-                    text = "See all",
-                    style = MaterialTheme.typography.labelLarge
+                    text = "View all",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.Medium
                 )
-                Spacer(modifier = Modifier.width(4.dp))
+                
                 Icon(
-                    imageVector = Icons.Default.ArrowForward,
-                    contentDescription = null,
-                    modifier = Modifier.size(16.dp)
+                    imageVector = Icons.Default.ChevronRight,
+                    contentDescription = "View all",
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(18.dp)
                 )
             }
         }
     }
-}
-
-@Composable
-fun HomeSectionTitle(
-    title: String,
-    modifier: Modifier = Modifier
-) {
-    Text(
-        text = title,
-        style = MaterialTheme.typography.headlineSmall,
-        color = MaterialTheme.colorScheme.onBackground,
-        modifier = modifier
-    )
-}
-
-@Composable
-fun HomeSectionSubtitle(
-    subtitle: String,
-    modifier: Modifier = Modifier
-) {
-    Text(
-        text = subtitle,
-        style = MaterialTheme.typography.bodyMedium,
-        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
-        modifier = modifier
-    )
 }

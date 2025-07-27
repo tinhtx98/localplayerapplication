@@ -3,59 +3,111 @@ package com.tinhtx.localplayerapplication.domain.repository
 import com.tinhtx.localplayerapplication.domain.model.*
 import kotlinx.coroutines.flow.Flow
 
+/**
+ * Repository interface for app settings (SINGLE SOURCE)
+ */
 interface SettingsRepository {
-
-    // App Settings
-    suspend fun getAppSettings(): AppSettings
+    
+    // Main settings flow
+    fun getAppSettings(): Flow<AppSettings>
     suspend fun updateAppSettings(settings: AppSettings)
-    fun getAppSettingsFlow(): Flow<AppSettings>
-
-    // Playback Settings
-    suspend fun getPlaybackSettings(): PlaybackSettings
-    suspend fun updatePlaybackSettings(settings: PlaybackSettings)
-    fun getPlaybackSettingsFlow(): Flow<PlaybackSettings>
-
-    // Appearance Settings
-    suspend fun getAppearanceSettings(): AppearanceSettings
-    suspend fun updateAppearanceSettings(settings: AppearanceSettings)
-    fun getAppearanceSettingsFlow(): Flow<AppearanceSettings>
-
-    // Library Settings
-    suspend fun getLibrarySettings(): LibrarySettings
-    suspend fun updateLibrarySettings(settings: LibrarySettings)
-    fun getLibrarySettingsFlow(): Flow<LibrarySettings>
-
-    // Notification Settings
-    suspend fun getNotificationSettings(): NotificationSettings
-    suspend fun updateNotificationSettings(settings: NotificationSettings)
-    fun getNotificationSettingsFlow(): Flow<NotificationSettings>
-
-    // Storage Settings
-    suspend fun getStorageSettings(): StorageSettings
-    suspend fun updateStorageSettings(settings: StorageSettings)
-    fun getStorageSettingsFlow(): Flow<StorageSettings>
-
-    // Privacy Settings
-    suspend fun getPrivacySettings(): PrivacySettings
-    suspend fun updatePrivacySettings(settings: PrivacySettings)
-    fun getPrivacySettingsFlow(): Flow<PrivacySettings>
-
-    // Individual Setting Methods
+    
+    // Theme & Appearance updates
     suspend fun updateTheme(theme: AppTheme)
-    suspend fun updateDynamicColors(enabled: Boolean)
+    suspend fun updateDynamicColor(enabled: Boolean)
+    suspend fun updateGridSize(gridSize: GridSize)
+    suspend fun updateSortOrder(sortOrder: SortOrder)
+    suspend fun updateLanguage(language: String)
+    
+    // Playback settings updates
+    suspend fun updateRepeatMode(mode: RepeatMode)
+    suspend fun updateShuffleMode(mode: ShuffleMode)
+    suspend fun updatePlaybackSpeed(speed: Float)
+    suspend fun updateCrossfade(enabled: Boolean, duration: Int)
+    suspend fun updateAutoPlay(enabled: Boolean)
     suspend fun updateGaplessPlayback(enabled: Boolean)
-    suspend fun updateCrossfade(enabled: Boolean)
-    suspend fun updateCrossfadeDuration(duration: Int)
-    suspend fun updateAutoScan(enabled: Boolean)
-    suspend fun updateAnalyticsEnabled(enabled: Boolean)
-
-    // Reset Settings
-    suspend fun resetAllSettings()
-    suspend fun resetPlaybackSettings()
-    suspend fun resetAppearanceSettings()
-    suspend fun resetLibrarySettings()
-
-    // Export/Import
+    suspend fun updateResumeOnHeadphones(enabled: Boolean)
+    suspend fun updatePauseOnDisconnect(enabled: Boolean)
+    
+    // Audio settings updates
+    suspend fun updateEqualizer(enabled: Boolean, preset: String, bands: List<Float>)
+    suspend fun updateBassBoost(level: Int)
+    suspend fun updateVirtualizer(level: Int)
+    suspend fun updateLoudnessEnhancer(level: Int)
+    suspend fun updateAudioFocus(enabled: Boolean, duckVolume: Boolean)
+    
+    // Library settings updates
+    suspend fun updateAutoScan(enabled: Boolean, intervalHours: Int)
+    suspend fun updateShortTrackSettings(ignore: Boolean, minDuration: Int)
+    suspend fun updateIncludedFolders(folders: List<String>)
+    suspend fun updateExcludedFolders(folders: List<String>)
+    suspend fun updateLastScanTime(timestamp: Long)
+    suspend fun updateLibrarySortOrder(sortOrder: SortOrder)
+    
+    // Privacy settings updates
+    suspend fun updateAnalytics(enabled: Boolean)
+    suspend fun updateCrashReporting(enabled: Boolean)
+    suspend fun updateUsageStatistics(enabled: Boolean)
+    suspend fun updateHistory(enabled: Boolean)
+    suspend fun updateScrobble(enabled: Boolean)
+    
+    // Storage settings updates
+    suspend fun updateCacheSettings(cacheSize: Long, maxCacheSize: Long, autoClear: Boolean)
+    suspend fun updateDownloadSettings(location: String, quality: String, wifiOnly: Boolean)
+    
+    // App metadata updates
+    suspend fun setFirstLaunch(isFirstLaunch: Boolean)
+    suspend fun updateAppVersion(version: String)
+    suspend fun updateLastUpdateCheck(timestamp: Long)
+    suspend fun setTutorialCompleted(completed: Boolean)
+    
+    // Batch operations
+    suspend fun updateThemeSettings(theme: AppTheme, dynamicColor: Boolean, gridSize: GridSize)
+    suspend fun updatePlaybackSettings(
+        repeatMode: RepeatMode,
+        shuffleMode: ShuffleMode,
+        playbackSpeed: Float,
+        crossfadeEnabled: Boolean,
+        crossfadeDuration: Int
+    )
+    suspend fun updateAudioSettings(
+        equalizerEnabled: Boolean,
+        equalizerPreset: String,
+        equalizerBands: List<Float>,
+        bassBoost: Int,
+        virtualizer: Int,
+        loudnessEnhancer: Int
+    )
+    suspend fun updateLibrarySettings(
+        autoScan: Boolean,
+        scanIntervalHours: Int,
+        ignoreShortTracks: Boolean,
+        minTrackDuration: Int,
+        includedFolders: List<String>,
+        excludedFolders: List<String>
+    )
+    suspend fun updatePrivacySettings(
+        analyticsEnabled: Boolean,
+        crashReporting: Boolean,
+        usageStatistics: Boolean,
+        historyEnabled: Boolean,
+        scrobbleEnabled: Boolean
+    )
+    
+    // Utility methods
+    suspend fun resetToDefaults()
     suspend fun exportSettings(): String
     suspend fun importSettings(settingsJson: String): Boolean
+    suspend fun clearAllSettings()
+    suspend fun validateSettings(settings: AppSettings): List<String>
+    suspend fun migrateSettings(fromVersion: String, toVersion: String): Boolean
+    
+    // Quick access methods
+    suspend fun toggleDynamicColor(): Boolean
+    suspend fun toggleEqualizer(): Boolean
+    suspend fun toggleAutoScan(): Boolean
+    suspend fun toggleAnalytics(): Boolean
+    suspend fun cycleTheme(): AppTheme
+    suspend fun cycleRepeatMode(): RepeatMode
+    suspend fun toggleShuffle(): ShuffleMode
 }

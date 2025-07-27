@@ -2,10 +2,8 @@ package com.tinhtx.localplayerapplication.presentation.components.ui
 
 import androidx.compose.animation.*
 import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -17,19 +15,15 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import coil.compose.AsyncImage
-import coil.request.ImageRequest
-import com.tinhtx.localplayerapplication.core.utils.MediaUtils
-import com.tinhtx.localplayerapplication.domain.model.RepeatMode
-import com.tinhtx.localplayerapplication.domain.model.ShuffleMode
 import com.tinhtx.localplayerapplication.domain.model.Song
+import com.tinhtx.localplayerapplication.presentation.components.image.AlbumArtwork
 import com.tinhtx.localplayerapplication.presentation.components.music.*
-import com.tinhtx.localplayerapplication.presentation.theme.MusicShapes
+import com.tinhtx.localplayerapplication.presentation.screens.queue.RepeatMode
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -37,61 +31,60 @@ fun PlayerBottomSheet(
     currentSong: Song?,
     isPlaying: Boolean,
     progress: Float,
-    currentTime: String,
-    totalTime: String,
-    queue: List<Song>,
-    shuffleMode: ShuffleMode,
+    currentPosition: Long,
+    duration: Long,
+    isShuffleEnabled: Boolean,
     repeatMode: RepeatMode,
+    isVisible: Boolean,
+    onDismiss: () -> Unit,
     onPlayPause: () -> Unit,
-    onPrevious: () -> Unit,
-    onNext: () -> Unit,
+    onSkipNext: () -> Unit,
+    onSkipPrevious: () -> Unit,
     onSeek: (Float) -> Unit,
-    onShuffleClick: () -> Unit,
-    onRepeatClick: () -> Unit,
-    onQueueItemClick: (Song) -> Unit,
-    onQueueItemRemove: (Song) -> Unit,
-    onFavoriteClick: () -> Unit,
-    onShareClick: () -> Unit,
-    onAddToPlaylistClick: () -> Unit,
-    modifier: Modifier = Modifier,
-    isFavorite: Boolean = false
+    onToggleShuffle: () -> Unit,
+    onToggleRepeat: () -> Unit,
+    onToggleFavorite: (() -> Unit)? = null,
+    isFavorite: Boolean = false,
+    modifier: Modifier = Modifier
 ) {
-    if (currentSong == null) return
+    val sheetState = rememberModalBottomSheetState(
+        skipPartiallyExpanded = false
+    )
     
-    var selectedTab by remember { mutableStateOf(PlayerBottomSheetTab.PLAYER) }
-    
-    BottomSheetScaffold(
-        scaffoldState = rememberBottomSheetScaffoldState(),
-        sheetContent = {
+    if (isVisible && currentSong != null) {
+        ModalBottomSheet(
+            onDismissRequest = onDismiss,
+            sheetState = sheetState,
+            modifier = modifier,
+            windowInsets = WindowInsets(0),
+            dragHandle = {
+                Surface(
+                    modifier = Modifier
+                        .width(32.dp)
+                        .height(4.dp)
+                        .clip(RoundedCornerShape(2.dp)),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+                ) {}
+            }
+        ) {
             PlayerBottomSheetContent(
                 currentSong = currentSong,
                 isPlaying = isPlaying,
                 progress = progress,
-                currentTime = currentTime,
-                totalTime = totalTime,
-                queue = queue,
-                shuffleMode = shuffleMode,
+                currentPosition = currentPosition,
+                duration = duration,
+                isShuffleEnabled = isShuffleEnabled,
                 repeatMode = repeatMode,
-                selectedTab = selectedTab,
-                onTabChange = { selectedTab = it },
                 onPlayPause = onPlayPause,
-                onPrevious = onPrevious,
-                onNext = onNext,
+                onSkipNext = onSkipNext,
+                onSkipPrevious = onSkipPrevious,
                 onSeek = onSeek,
-                onShuffleClick = onShuffleClick,
-                onRepeatClick = onRepeatClick,
-                onQueueItemClick = onQueueItemClick,
-                onQueueItemRemove = onQueueItemRemove,
-                onFavoriteClick = onFavoriteClick,
-                onShareClick = onShareClick,
-                onAddToPlaylistClick = onAddToPlaylistClick,
+                onToggleShuffle = onToggleShuffle,
+                onToggleRepeat = onToggleRepeat,
+                onToggleFavorite = onToggleFavorite,
                 isFavorite = isFavorite
             )
-        },
-        sheetPeekHeight = 0.dp,
-        modifier = modifier
-    ) {
-        // Content when bottom sheet is collapsed
+        }
     }
 }
 
@@ -100,205 +93,93 @@ private fun PlayerBottomSheetContent(
     currentSong: Song,
     isPlaying: Boolean,
     progress: Float,
-    currentTime: String,
-    totalTime: String,
-    queue: List<Song>,
-    shuffleMode: ShuffleMode,
+    currentPosition: Long,
+    duration: Long,
+    isShuffleEnabled: Boolean,
     repeatMode: RepeatMode,
-    selectedTab: PlayerBottomSheetTab,
-    onTabChange: (PlayerBottomSheetTab) -> Unit,
     onPlayPause: () -> Unit,
-    onPrevious: () -> Unit,
-    onNext: () -> Unit,
+    onSkipNext: () -> Unit,
+    onSkipPrevious: () -> Unit,
     onSeek: (Float) -> Unit,
-    onShuffleClick: () -> Unit,
-    onRepeatClick: () -> Unit,
-    onQueueItemClick: (Song) -> Unit,
-    onQueueItemRemove: (Song) -> Unit,
-    onFavoriteClick: () -> Unit,
-    onShareClick: () -> Unit,
-    onAddToPlaylistClick: () -> Unit,
+    onToggleShuffle: () -> Unit,
+    onToggleRepeat: () -> Unit,
+    onToggleFavorite: (() -> Unit)?,
     isFavorite: Boolean
 ) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(16.dp)
-    ) {
-        // Drag handle
-        Box(
-            modifier = Modifier
-                .width(32.dp)
-                .height(4.dp)
-                .background(
-                    MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
-                    RoundedCornerShape(2.dp)
-                )
-                .align(Alignment.CenterHorizontally)
-        )
-        
-        Spacer(modifier = Modifier.height(16.dp))
-        
-        // Tab row
-        PlayerBottomSheetTabs(
-            selectedTab = selectedTab,
-            onTabChange = onTabChange
-        )
-        
-        Spacer(modifier = Modifier.height(16.dp))
-        
-        // Content based on selected tab
-        when (selectedTab) {
-            PlayerBottomSheetTab.PLAYER -> {
-                FullPlayerContent(
-                    currentSong = currentSong,
-                    isPlaying = isPlaying,
-                    progress = progress,
-                    currentTime = currentTime,
-                    totalTime = totalTime,
-                    shuffleMode = shuffleMode,
-                    repeatMode = repeatMode,
-                    onPlayPause = onPlayPause,
-                    onPrevious = onPrevious,
-                    onNext = onNext,
-                    onSeek = onSeek,
-                    onShuffleClick = onShuffleClick,
-                    onRepeatClick = onRepeatClick,
-                    onFavoriteClick = onFavoriteClick,
-                    onShareClick = onShareClick,
-                    onAddToPlaylistClick = onAddToPlaylistClick,
-                    isFavorite = isFavorite
-                )
-            }
-            PlayerBottomSheetTab.QUEUE -> {
-                QueueContent(
-                    queue = queue,
-                    currentSong = currentSong,
-                    onQueueItemClick = onQueueItemClick,
-                    onQueueItemRemove = onQueueItemRemove
-                )
-            }
-            PlayerBottomSheetTab.LYRICS -> {
-                LyricsContent(
-                    currentSong = currentSong
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun PlayerBottomSheetTabs(
-    selectedTab: PlayerBottomSheetTab,
-    onTabChange: (PlayerBottomSheetTab) -> Unit
-) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceEvenly
-    ) {
-        PlayerBottomSheetTab.values().forEach { tab ->
-            val isSelected = selectedTab == tab
-            
-            TextButton(
-                onClick = { onTabChange(tab) },
-                colors = ButtonDefaults.textButtonColors(
-                    contentColor = if (isSelected) {
-                        MaterialTheme.colorScheme.primary
-                    } else {
-                        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                    }
-                )
-            ) {
-                Text(
-                    text = tab.title,
-                    style = MaterialTheme.typography.titleSmall
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun FullPlayerContent(
-    currentSong: Song,
-    isPlaying: Boolean,
-    progress: Float,
-    currentTime: String,
-    totalTime: String,
-    shuffleMode: ShuffleMode,
-    repeatMode: RepeatMode,
-    onPlayPause: () -> Unit,
-    onPrevious: () -> Unit,
-    onNext: () -> Unit,
-    onSeek: (Float) -> Unit,
-    onShuffleClick: () -> Unit,
-    onRepeatClick: () -> Unit,
-    onFavoriteClick: () -> Unit,
-    onShareClick: () -> Unit,
-    onAddToPlaylistClick: () -> Unit,
-    isFavorite: Boolean
-) {
-    Column(
-        modifier = Modifier.fillMaxWidth(),
+            .padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        // Album artwork
-        AsyncImage(
-            model = ImageRequest.Builder(LocalContext.current)
-                .data(MediaUtils.getAlbumArtUri(currentSong.albumId))
-                .crossfade(true)
-                .build(),
-            contentDescription = "Album artwork",
+        // Large album artwork
+        Box(
             modifier = Modifier
-                .size(280.dp)
-                .clip(MusicShapes.albumCover)
-                .background(MaterialTheme.colorScheme.surfaceVariant),
-            contentScale = ContentScale.Crop,
-            error = {
-                Box(
+                .size(300.dp)
+                .clip(RoundedCornerShape(20.dp))
+        ) {
+            AlbumArtwork(
+                artworkUrl = currentSong.artworkPath,
+                albumName = currentSong.album,
+                artistName = currentSong.artist,
+                modifier = Modifier.fillMaxSize(),
+                size = 300.dp,
+                cornerRadius = 20.dp,
+                showGradientOverlay = true
+            )
+            
+            // Favorite button overlay
+            if (onToggleFavorite != null) {
+                IconButton(
+                    onClick = onToggleFavorite,
                     modifier = Modifier
-                        .fillMaxSize()
+                        .align(Alignment.TopEnd)
+                        .padding(16.dp)
                         .background(
-                            brush = Brush.verticalGradient(
-                                colors = listOf(
-                                    MaterialTheme.colorScheme.primaryContainer,
-                                    MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f)
-                                )
-                            )
-                        ),
-                    contentAlignment = Alignment.Center
+                            MaterialTheme.colorScheme.surface.copy(alpha = 0.8f),
+                            androidx.compose.foundation.shape.CircleShape
+                        )
                 ) {
                     Icon(
-                        imageVector = Icons.Default.MusicNote,
-                        contentDescription = null,
-                        modifier = Modifier.size(80.dp),
-                        tint = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.6f)
+                        imageVector = if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                        contentDescription = if (isFavorite) "Remove from favorites" else "Add to favorites",
+                        tint = if (isFavorite) Color.Red else MaterialTheme.colorScheme.onSurface
                     )
                 }
             }
-        )
+        }
         
         Spacer(modifier = Modifier.height(32.dp))
         
-        // Song info
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Text(
-                text = currentSong.title,
-                style = MaterialTheme.typography.headlineSmall,
-                color = MaterialTheme.colorScheme.onSurface,
-                textAlign = TextAlign.Center,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis
-            )
-            
+        // Song information
+        Text(
+            text = currentSong.title,
+            style = MaterialTheme.typography.headlineMedium,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurface,
+            textAlign = TextAlign.Center,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis
+        )
+        
+        Spacer(modifier = Modifier.height(8.dp))
+        
+        Text(
+            text = currentSong.artist,
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+        
+        if (currentSong.album.isNotEmpty()) {
             Spacer(modifier = Modifier.height(4.dp))
             
             Text(
-                text = currentSong.displayArtist,
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                text = currentSong.album,
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
                 textAlign = TextAlign.Center,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
@@ -307,115 +188,245 @@ private fun FullPlayerContent(
         
         Spacer(modifier = Modifier.height(32.dp))
         
-        // Seek bar
-        MusicSeekBar(
+        // Seek bar with time
+        SeekBarWithTime(
             progress = progress,
-            onProgressChanged = onSeek,
-            currentTime = currentTime,
-            totalTime = totalTime,
+            currentTime = currentPosition,
+            totalTime = duration,
+            onSeek = onSeek,
             modifier = Modifier.fillMaxWidth()
         )
         
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(32.dp))
         
         // Player controls
-        PlayerControls(
+        ExtendedPlayerControls(
             isPlaying = isPlaying,
-            onPlayPause = onPlayPause,
-            onPrevious = onPrevious,
-            onNext = onNext,
-            shuffleMode = shuffleMode,
+            isShuffleEnabled = isShuffleEnabled,
             repeatMode = repeatMode,
-            onShuffleClick = onShuffleClick,
-            onRepeatClick = onRepeatClick,
-            controlsSize = PlayerControlsSize.LARGE
+            onPlayPause = onPlayPause,
+            onSkipNext = onSkipNext,
+            onSkipPrevious = onSkipPrevious,
+            onToggleShuffle = onToggleShuffle,
+            onToggleRepeat = onToggleRepeat,
+            modifier = Modifier.fillMaxWidth()
         )
         
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(16.dp))
         
-        // Action buttons
+        // Additional actions
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceEvenly
         ) {
-            IconButton(onClick = onFavoriteClick) {
+            IconButton(onClick = { /* TODO: Show queue */ }) {
                 Icon(
-                    imageVector = if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                    contentDescription = if (isFavorite) "Remove from favorites" else "Add to favorites",
-                    tint = if (isFavorite) Color.Red else MaterialTheme.colorScheme.onSurface
+                    imageVector = Icons.Default.QueueMusic,
+                    contentDescription = "Queue",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
             
-            IconButton(onClick = onAddToPlaylistClick) {
+            IconButton(onClick = { /* TODO: Show lyrics */ }) {
                 Icon(
-                    imageVector = Icons.Default.PlaylistAdd,
-                    contentDescription = "Add to playlist"
+                    imageVector = Icons.Default.Lyrics,
+                    contentDescription = "Lyrics",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
             
-            IconButton(onClick = onShareClick) {
+            IconButton(onClick = { /* TODO: Share song */ }) {
                 Icon(
                     imageVector = Icons.Default.Share,
-                    contentDescription = "Share"
+                    contentDescription = "Share",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            
+            IconButton(onClick = { /* TODO: More options */ }) {
+                Icon(
+                    imageVector = Icons.Default.MoreVert,
+                    contentDescription = "More options",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         }
-    }
-}
-
-@Composable
-private fun QueueContent(
-    queue: List<Song>,
-    currentSong: Song,
-    onQueueItemClick: (Song) -> Unit,
-    onQueueItemRemove: (Song) -> Unit
-) {
-    Column {
-        Text(
-            text = "Playing Queue (${queue.size})",
-            style = MaterialTheme.typography.titleMedium,
-            modifier = Modifier.padding(bottom = 16.dp)
-        )
         
-        LazyColumn {
-            items(queue, key = { it.id }) { song ->
-                SongItem(
-                    song = song,
-                    isPlaying = song.id == currentSong.id,
-                    onClick = { onQueueItemClick(song) },
-                    onMoreClick = { onQueueItemRemove(song) },
-                    modifier = Modifier.animateItemPlacement()
-                )
-            }
-        }
+        // Bottom spacing for gesture area
+        Spacer(modifier = Modifier.height(32.dp))
     }
 }
 
 @Composable
-private fun LyricsContent(
-    currentSong: Song
+fun CompactPlayerBottomSheet(
+    currentSong: Song?,
+    isPlaying: Boolean,
+    progress: Float,
+    onPlayPause: () -> Unit,
+    onSkipNext: () -> Unit,
+    onClick: () -> Unit,
+    onClose: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
-    Column(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalAlignment = Alignment.CenterHorizontally
+    AnimatedVisibility(
+        visible = currentSong != null,
+        enter = slideInVertically(initialOffsetY = { it }),
+        exit = slideOutVertically(targetOffsetY = { it }),
+        modifier = modifier
     ) {
-        Text(
-            text = "Lyrics",
-            style = MaterialTheme.typography.titleMedium,
-            modifier = Modifier.padding(bottom = 16.dp)
-        )
-        
-        Text(
-            text = "Lyrics not available for \"${currentSong.title}\"",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-            textAlign = TextAlign.Center
-        )
+        if (currentSong != null) {
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                shape = RoundedCornerShape(12.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant,
+                shadowElevation = 8.dp,
+                onClick = onClick
+            ) {
+                Column {
+                    // Progress bar
+                    LinearProgressIndicator(
+                        progress = progress,
+                        modifier = Modifier.fillMaxWidth(),
+                        color = MaterialTheme.colorScheme.primary,
+                        trackColor = Color.Transparent
+                    )
+                    
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        // Album artwork
+                        AlbumArtwork(
+                            artworkUrl = currentSong.artworkPath,
+                            albumName = currentSong.album,
+                            artistName = currentSong.artist,
+                            modifier = Modifier.size(40.dp),
+                            size = 40.dp,
+                            cornerRadius = 8.dp
+                        )
+                        
+                        Spacer(modifier = Modifier.width(12.dp))
+                        
+                        // Song info
+                        Column(
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text(
+                                text = currentSong.title,
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            
+                            Text(
+                                text = currentSong.artist,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                        
+                        // Compact controls
+                        CompactPlayerControls(
+                            isPlaying = isPlaying,
+                            onPlayPause = onPlayPause,
+                            onSkipNext = onSkipNext
+                        )
+                        
+                        // Close button
+                        IconButton(onClick = onClose) {
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = "Close",
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 
-enum class PlayerBottomSheetTab(val title: String) {
-    PLAYER("Player"),
-    QUEUE("Queue"),
-    LYRICS("Lyrics")
+@Composable
+fun SwipeablePlayerBottomSheet(
+    currentSong: Song?,
+    isPlaying: Boolean,
+    progress: Float,
+    onPlayPause: () -> Unit,
+    onSkipNext: () -> Unit,
+    onSkipPrevious: () -> Unit,
+    onSwipeUp: () -> Unit,
+    onSwipeDown: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val density = LocalDensity.current
+    var offsetY by remember { mutableStateOf(0f) }
+    
+    AnimatedVisibility(
+        visible = currentSong != null,
+        enter = slideInVertically(initialOffsetY = { it }),
+        exit = slideOutVertically(targetOffsetY = { it }),
+        modifier = modifier
+    ) {
+        if (currentSong != null) {
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .offset(y = with(density) { offsetY.toDp() })
+                    .pointerInput(Unit) {
+                        detectVerticalDragGestures(
+                            onDragEnd = {
+                                when {
+                                    offsetY < -100 -> onSwipeUp()
+                                    offsetY > 100 -> onSwipeDown()
+                                }
+                                offsetY = 0f
+                            }
+                        ) { _, dragAmount ->
+                            val newOffset = offsetY + dragAmount
+                            offsetY = newOffset.coerceIn(-200f, 200f)
+                        }
+                    },
+                color = MaterialTheme.colorScheme.surfaceVariant,
+                shadowElevation = 8.dp
+            ) {
+                Column {
+                    // Swipe indicator
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 8.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Surface(
+                            modifier = Modifier
+                                .width(32.dp)
+                                .height(4.dp),
+                            shape = RoundedCornerShape(2.dp),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+                        ) {}
+                    }
+                    
+                    // Player content
+                    MiniPlayer(
+                        currentSong = currentSong,
+                        isPlaying = isPlaying,
+                        progress = progress,
+                        onPlayPause = onPlayPause,
+                        onSkipNext = onSkipNext,
+                        onSkipPrevious = onSkipPrevious,
+                        onClick = onSwipeUp,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                    )
+                }
+            }
+        }
+    }
 }

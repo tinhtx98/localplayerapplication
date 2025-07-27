@@ -3,18 +3,23 @@ package com.tinhtx.localplayerapplication.domain.model
 import android.os.Parcelable
 import kotlinx.parcelize.Parcelize
 
+/**
+ * Domain model representing an artist
+ */
 @Parcelize
 data class Artist(
     val id: Long = 0,
-    val mediaStoreId: Long,
     val name: String,
-    val albumCount: Int,
-    val trackCount: Int,
-    val artistArtPath: String? = null
+    val albumCount: Int = 0,
+    val songCount: Int = 0,
+    val artworkPath: String? = null
 ) : Parcelable {
     
     val displayName: String
         get() = if (name.isBlank() || name == "Unknown Artist") "Unknown Artist" else name
+    
+    val hasArtwork: Boolean
+        get() = !artworkPath.isNullOrBlank()
     
     val albumCountText: String
         get() = when (albumCount) {
@@ -23,22 +28,13 @@ data class Artist(
             else -> "$albumCount albums"
         }
     
-    val trackCountText: String
-        get() = when (trackCount) {
-            0 -> "No tracks"
-            1 -> "1 track"
-            else -> "$trackCount tracks"
+    val songCountText: String
+        get() = when (songCount) {
+            0 -> "No songs"
+            1 -> "1 song"
+            else -> "$songCount songs"
         }
     
-    val summaryText: String
-        get() = "$albumCountText • $trackCountText"
-    
-    companion object {
-        fun empty() = Artist(
-            mediaStoreId = -1,
-            name = "",
-            albumCount = 0,
-            trackCount = 0
-        )
-    }
+    val statsText: String
+        get() = "$albumCountText • $songCountText"
 }

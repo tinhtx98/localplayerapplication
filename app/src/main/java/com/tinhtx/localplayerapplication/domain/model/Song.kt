@@ -3,6 +3,9 @@ package com.tinhtx.localplayerapplication.domain.model
 import android.os.Parcelable
 import kotlinx.parcelize.Parcelize
 
+/**
+ * Domain model representing a song
+ */
 @Parcelize
 data class Song(
     val id: Long = 0,
@@ -10,18 +13,19 @@ data class Song(
     val title: String,
     val artist: String,
     val album: String,
-    val duration: Long,
-    val path: String, // File path
-    val dateAdded: Long,
     val albumId: Long,
-    val artistId: Long,
-    val track: Int,
+    val duration: Long, // in milliseconds
+    val path: String,
+    val size: Long, // in bytes
+    val mimeType: String,
+    val dateAdded: Long,
+    val dateModified: Long,
     val year: Int,
-    val size: Long,
-    val mimeType: String? = null,
+    val trackNumber: Int,
+    val genre: String? = null,
     val isFavorite: Boolean = false,
     val playCount: Int = 0,
-    val lastPlayed: Long? = null
+    val lastPlayed: Long = 0L
 ) : Parcelable {
     
     val formattedDuration: String
@@ -30,48 +34,37 @@ data class Song(
     val formattedSize: String
         get() = formatFileSize(size)
     
+    val isValidFile: Boolean
+        get() = path.isNotEmpty() && duration > 0
+    
     val displayArtist: String
         get() = if (artist.isBlank() || artist == "Unknown Artist") "Unknown Artist" else artist
     
     val displayAlbum: String
         get() = if (album.isBlank() || album == "Unknown Album") "Unknown Album" else album
     
-    val isValidFile: Boolean
-        get() = path.isNotBlank() && java.io.File(path).exists()
-
     private fun formatDuration(durationMs: Long): String {
-        val minutes = (durationMs / 1000) / 60
         val seconds = (durationMs / 1000) % 60
-        return String.format("%02d:%02d", minutes, seconds)
-    }
-    
-    private fun formatFileSize(sizeBytes: Long): String {
-        val kb = 1024.0
-        val mb = kb * 1024
-        val gb = mb * 1024
+        val minutes = (durationMs / (1000 * 60)) % 60
+        val hours = (durationMs / (1000 * 60 * 60))
         
-        return when {
-            sizeBytes >= gb -> String.format("%.1f GB", sizeBytes / gb)
-            sizeBytes >= mb -> String.format("%.1f MB", sizeBytes / mb)
-            sizeBytes >= kb -> String.format("%.1f KB", sizeBytes / kb)
-            else -> "$sizeBytes B"
+        return if (hours > 0) {
+            String.format("%d:%02d:%02d", hours, minutes, seconds)
+        } else {
+            String.format("%d:%02d", minutes, seconds)
         }
     }
     
-    companion object {
-        fun empty() = Song(
-            mediaStoreId = -1,
-            title = "",
-            artist = "",
-            album = "",
-            duration = 0,
-            path = "",
-            dateAdded = 0,
-            albumId = -1,
-            artistId = -1,
-            track = 0,
-            year = 0,
-            size = 0
-        )
+    private fun formatFileSize(sizeBytes: Long): String {
+        val units = arrayOf("B", "KB", "MB", "GB")
+        var size = sizeBytes.toDouble()
+        var unitIndex = 0
+        
+        while (size >= 1024 && unitIndex < units.size - 1) {
+            size /= 1024
+            unitIndex++
+        }
+        
+        return String.format("%.1f %s", size, units[unitIndex])
     }
 }

@@ -1,530 +1,572 @@
 package com.tinhtx.localplayerapplication.presentation.screens.home
 
-import androidx.compose.animation.*
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyListState
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.lazy.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
-import androidx.compose.material3.windowsizeclass.WindowSizeClass
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.tinhtx.localplayerapplication.core.utils.isNotEmpty
-import com.tinhtx.localplayerapplication.domain.model.Album
-import com.tinhtx.localplayerapplication.domain.model.Artist
-import com.tinhtx.localplayerapplication.domain.model.Playlist
-import com.tinhtx.localplayerapplication.domain.model.Song
+import com.google.accompanist.swiperefresh.SwipeRefresh
+import com.google.accompanist.swiperefresh.rememberSwipeRefreshState
+import com.tinhtx.localplayerapplication.domain.model.*
 import com.tinhtx.localplayerapplication.presentation.components.common.*
-import com.tinhtx.localplayerapplication.presentation.components.image.AlbumArtImage
-import com.tinhtx.localplayerapplication.presentation.components.music.*
-import com.tinhtx.localplayerapplication.presentation.components.ui.HomeTopAppBar
 import com.tinhtx.localplayerapplication.presentation.screens.home.components.*
-import com.tinhtx.localplayerapplication.presentation.theme.getHorizontalPadding
-import kotlin.collections.isNotEmpty
-import kotlin.collections.take
 
+/**
+ * Home Screen - Main dashboard with music overview
+ * Maps với HomeViewModel, HomeUiState và tất cả components
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
-    onNavigateToPlayer: () -> Unit,
-    onNavigateToPlaylist: (Long) -> Unit,
-    onNavigateToSearch: () -> Unit,
     onNavigateToLibrary: () -> Unit,
-    windowSizeClass: WindowSizeClass,
+    onNavigateToPlayer: (Song) -> Unit,
+    onNavigateToPlaylist: (Playlist) -> Unit,
+    onNavigateToFavorites: () -> Unit,
+    onNavigateToSearch: () -> Unit,
     modifier: Modifier = Modifier,
     viewModel: HomeViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val isRefreshing by viewModel.isRefreshing.collectAsStateWithLifecycle()
     val context = LocalContext.current
-    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
-    val listState = rememberLazyListState()
 
-    LaunchedEffect(Unit) {
-        viewModel.loadHomeData()
+    // Handle error states
+    LaunchedEffect(uiState.error) {
+        uiState.error?.let { error ->
+            // Show snackbar or toast for error
+            // For now, error is shown in UI
+        }
     }
 
-    Scaffold(
-        modifier = modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
-        topBar = {
-            HomeTopAppBar(
-                userName = uiState.userProfile.displayName,
-                greeting = uiState.userProfile.greeting,
-                profileImageUrl = uiState.userProfile.profileImageUri,
-                onProfileClick = { viewModel.onProfileClick() },
-                onSearchClick = onNavigateToSearch,
-                onNotificationClick = { viewModel.onNotificationClick() },
-                hasNotifications = uiState.hasNotifications,
-                scrollBehavior = scrollBehavior
-            )
-        }
-    ) { paddingValues ->
-        Box(
+    SwipeRefresh(
+        state = rememberSwipeRefreshState(isRefreshing),
+        onRefresh = viewModel::refresh,
+        modifier = modifier.fillMaxSize()
+    ) {
+        Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(paddingValues)
+                .verticalScroll(rememberScrollState())
         ) {
-            when {
-                uiState.isLoading -> {
-                    FullScreenLoadingIndicator(
-                        message = "Loading your music collection...",
-                        showBackground = false
-                    )
+            // Top App Bar Section
+            HomeTopBar(
+                onSearchClick = onNavigateToSearch,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+            )
+
+            // Welcome Section
+            WelcomeSection(
+                libraryStats = uiState.libraryStats,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+            )
+
+            // Quick Stats Section - MAPPED COMPONENT
+            QuickStatsSection(
+                stats = uiState.libraryStats,
+                onNavigateToLibrary = onNavigateToLibrary,
+                modifier = Modifier.padding(vertical = 8.dp)
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Main Content
+            if (uiState.isLoading) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(400.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    LoadingIndicator()
                 }
-                uiState.error != null -> {
-                    MusicErrorMessage(
-                        title = "Unable to load music",
-                        message = uiState.error ?: "An unexpected error occurred.",
-                        onRetry = { viewModel.retryLoadData() },
-                        errorType = MusicErrorType.GENERAL,
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(16.dp)
-                    )
-                }
-                uiState.isEmpty -> {
-                    NoMusicFoundState(
-                        onScanClick = { viewModel.startMediaScan() },
-                        modifier = Modifier.fillMaxSize()
-                    )
-                }
-                else -> {
-                    HomeContent(
-                        uiState = uiState,
-                        windowSizeClass = windowSizeClass,
-                        listState = listState,
-                        onSongClick = { song ->
-                            viewModel.playSong(song)
-                            onNavigateToPlayer()
-                        },
-                        onAlbumClick = { album ->
-                            viewModel.playAlbum(album)
-                            onNavigateToPlayer()
-                        },
-                        onArtistClick = { artist ->
-                            viewModel.playArtist(artist)
-                            onNavigateToPlayer()
-                        },
-                        onPlaylistClick = onNavigateToPlaylist,
-                        onSeeAllRecentClick = { onNavigateToLibrary() },
-                        onSeeAllAlbumsClick = { onNavigateToLibrary() },
-                        onSeeAllArtistsClick = { onNavigateToLibrary() },
-                        onSeeAllPlaylistsClick = { onNavigateToLibrary() },
-                        onFavoriteClick = { song ->
-                            viewModel.toggleFavorite(song)
-                        },
-                        onAddToPlaylistClick = { song ->
-                            viewModel.showAddToPlaylistDialog(song)
-                        },
-                        onRefresh = { viewModel.refreshData() }
-                    )
-                }
+            } else if (uiState.hasError) {
+                ErrorSection(
+                    error = uiState.error ?: "Unknown error",
+                    onRetry = viewModel::loadHomeData,
+                    onClearError = viewModel::clearError,
+                    modifier = Modifier.padding(16.dp)
+                )
+            } else {
+                HomeContentSections(
+                    uiState = uiState,
+                    onSongClick = { song ->
+                        viewModel.playSong(song)
+                        onNavigateToPlayer(song)
+                    },
+                    onPlaylistClick = { playlist ->
+                        viewModel.playPlaylist(playlist)
+                        onNavigateToPlaylist(playlist)
+                    },
+                    onFavoriteClick = viewModel::toggleFavorite,
+                    onSectionHeaderClick = { section ->
+                        when (section) {
+                            HomeSection.RECENT_SONGS -> onNavigateToLibrary()
+                            HomeSection.FAVORITES -> onNavigateToFavorites()
+                            HomeSection.PLAYLISTS -> onNavigateToLibrary()
+                            HomeSection.RECENTLY_PLAYED -> onNavigateToLibrary()
+                        }
+                        viewModel.navigateToSection(section)
+                    }
+                )
             }
+
+            // Bottom spacing for mini player
+            Spacer(modifier = Modifier.height(100.dp))
         }
     }
 }
 
 @Composable
-private fun HomeContent(
-    uiState: HomeUiState,
-    windowSizeClass: WindowSizeClass,
-    listState: LazyListState,
-    onSongClick: (Song) -> Unit,
-    onAlbumClick: (Album) -> Unit,
-    onArtistClick: (Artist) -> Unit,
-    onPlaylistClick: (Long) -> Unit,
-    onSeeAllRecentClick: () -> Unit,
-    onSeeAllAlbumsClick: () -> Unit,
-    onSeeAllArtistsClick: () -> Unit,
-    onSeeAllPlaylistsClick: () -> Unit,
-    onFavoriteClick: (Song) -> Unit,
-    onAddToPlaylistClick: (Song) -> Unit,
-    onRefresh: () -> Unit
+private fun HomeTopBar(
+    onSearchClick: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
-    val horizontalPadding = windowSizeClass.getHorizontalPadding()
-
-    LazyColumn(
-        state = listState,
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(bottom = 100.dp),
-        verticalArrangement = Arrangement.spacedBy(24.dp)
+    Row(
+        modifier = modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        // Quick Stats Section
-        item {
-            QuickStatsSection(
-                songCount = uiState.totalSongs,
-                albumCount = uiState.totalAlbums,
-                artistCount = uiState.totalArtists,
-                totalDuration = uiState.totalDuration,
-                modifier = Modifier.padding(horizontal = horizontalPadding)
+        Column {
+            Text(
+                text = "Good ${getGreeting()}",
+                style = MaterialTheme.typography.headlineMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Text(
+                text = "Ready to discover music?",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
 
-        // Recently Played Section
-        if (uiState.recentlyPlayed.isNotEmpty()) {
-            item {
-                HomeSectionHeader(
-                    title = "Recently Played",
-                    subtitle = "Continue where you left off",
-                    onSeeAllClick = onSeeAllRecentClick,
-                    modifier = Modifier.padding(horizontal = horizontalPadding)
-                )
-            }
-
-            item {
-                LazyRow(
-                    contentPadding = PaddingValues(horizontal = horizontalPadding),
-                    horizontalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    items(
-                        items = uiState.recentlyPlayed.take(10),
-                        key = { it.id }
-                    ) { song ->
-                        RecentlyPlayedItem(
-                            song = song,
-                            onClick = { onSongClick(song) },
-                            onFavoriteClick = { onFavoriteClick(song) },
-                            modifier = Modifier
-                                .width(280.dp)
-                                .animateItemPlacement()
-                        )
-                    }
-                }
-            }
-        }
-
-        // Quick Access Playlists
-        if (uiState.quickAccessPlaylists.isNotEmpty()) {
-            item {
-                HomeSectionHeader(
-                    title = "Your Playlists",
-                    subtitle = "Quick access to your music",
-                    onSeeAllClick = onSeeAllPlaylistsClick,
-                    modifier = Modifier.padding(horizontal = horizontalPadding)
-                )
-            }
-
-            item {
-                LazyRow(
-                    contentPadding = PaddingValues(horizontal = horizontalPadding),
-                    horizontalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    items(
-                        items = uiState.quickAccessPlaylists.take(6),
-                        key = { it.id }
-                    ) { playlist ->
-                        PlaylistQuickAccessCard(
-                            playlist = playlist,
-                            onClick = { onPlaylistClick(playlist.id) },
-                            modifier = Modifier
-                                .width(160.dp)
-                                .animateItemPlacement()
-                        )
-                    }
-                }
-            }
-        }
-
-        // New Albums Section
-        if (uiState.recentAlbums.isNotEmpty()) {
-            item {
-                HomeSectionHeader(
-                    title = "Recent Albums",
-                    subtitle = "Latest additions to your library",
-                    onSeeAllClick = onSeeAllAlbumsClick,
-                    modifier = Modifier.padding(horizontal = horizontalPadding)
-                )
-            }
-
-            item {
-                LazyRow(
-                    contentPadding = PaddingValues(horizontal = horizontalPadding),
-                    horizontalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    items(
-                        items = uiState.recentAlbums.take(8),
-                        key = { it.id }
-                    ) { album ->
-                        AlbumCard(
-                            album = album,
-                            onClick = { onAlbumClick(album) },
-                            modifier = Modifier
-                                .width(160.dp)
-                                .animateItemPlacement()
-                        )
-                    }
-                }
-            }
-        }
-
-        // Featured Artists Section
-        if (uiState.featuredArtists.isNotEmpty()) {
-            item {
-                HomeSectionHeader(
-                    title = "Your Top Artists",
-                    subtitle = "Artists you listen to most",
-                    onSeeAllClick = onSeeAllArtistsClick,
-                    modifier = Modifier.padding(horizontal = horizontalPadding)
-                )
-            }
-
-            item {
-                LazyRow(
-                    contentPadding = PaddingValues(horizontal = horizontalPadding),
-                    horizontalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    items(
-                        items = uiState.featuredArtists.take(6),
-                        key = { it.id }
-                    ) { artist ->
-                        ArtistCard(
-                            artist = artist,
-                            onClick = { onArtistClick(artist) },
-                            modifier = Modifier
-                                .width(140.dp)
-                                .animateItemPlacement()
-                        )
-                    }
-                }
-            }
-        }
-
-        // Most Played Songs Section
-        if (uiState.mostPlayed.isNotEmpty()) {
-            item {
-                HomeSectionHeader(
-                    title = "Most Played",
-                    subtitle = "Your favorite tracks",
-                    onSeeAllClick = onSeeAllRecentClick,
-                    modifier = Modifier.padding(horizontal = horizontalPadding)
-                )
-            }
-
-            items(
-                items = uiState.mostPlayed.take(5),
-                key = { it.id }
-            ) { song ->
-                SongItem(
-                    song = song,
-                    onClick = { onSongClick(song) },
-                    onFavoriteClick = { onFavoriteClick(song) },
-                    onMoreClick = { onAddToPlaylistClick(song) },
-                    modifier = Modifier
-                        .padding(horizontal = horizontalPadding)
-                        .animateItemPlacement()
-                )
-            }
-        }
-
-        // Made For You Section (Recommendations)
-        if (uiState.recommendedSongs.isNotEmpty()) {
-            item {
-                HomeSectionHeader(
-                    title = "Made For You",
-                    subtitle = "Personalized recommendations",
-                    modifier = Modifier.padding(horizontal = horizontalPadding)
-                )
-            }
-
-            item {
-                LazyRow(
-                    contentPadding = PaddingValues(horizontal = horizontalPadding),
-                    horizontalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    items(
-                        items = uiState.recommendedSongs.take(8),
-                        key = { it.id }
-                    ) { song ->
-                        RecommendedSongCard(
-                            song = song,
-                            onClick = { onSongClick(song) },
-                            onFavoriteClick = { onFavoriteClick(song) },
-                            reason = generateRecommendationReason(song, uiState),
-                            modifier = Modifier
-                                .width(200.dp)
-                                .animateItemPlacement()
-                        )
-                    }
-                }
-            }
-        }
-
-        // Smart Recommendations Section
-        if (uiState.recommendedSongs.isNotEmpty()) {
-            item {
-                SmartRecommendationCard(
-                    songs = uiState.recommendedSongs,
-                    title = "Discovery Weekly",
-                    subtitle = "New music picked just for you",
-                    onViewAllClick = { onNavigateToLibrary() },
-                    onSongClick = onSongClick,
-                    onFavoriteClick = onFavoriteClick,
-                    modifier = Modifier.padding(horizontal = horizontalPadding)
-                )
-            }
-        }
-
-        // Recently Added Section (if different from recent albums)
-        if (uiState.recentlyPlayed.isNotEmpty()) {
-            item {
-                HomeSectionHeader(
-                    title = "Jump Back In",
-                    subtitle = "Pick up where you left off",
-                    modifier = Modifier.padding(horizontal = horizontalPadding)
-                )
-            }
-
-            item {
-                RecentlyPlayedGrid(
-                    songs = uiState.recentlyPlayed.take(4),
-                    onSongClick = onSongClick,
-                    onFavoriteClick = onFavoriteClick,
-                    columns = 2,
-                    modifier = Modifier.padding(horizontal = horizontalPadding)
-                )
-            }
-        }
-
-        // Trending Section (if we have play count data)
-        if (uiState.mostPlayed.isNotEmpty()) {
-            item {
-                HomeSectionHeader(
-                    title = "Trending in Your Library",
-                    subtitle = "Your most played this week",
-                    modifier = Modifier.padding(horizontal = horizontalPadding)
-                )
-            }
-
-            items(
-                items = uiState.mostPlayed.take(3),
-                key = { it.id }
-            ) { song ->
-                TrendingSongItem(
-                    song = song,
-                    rank = uiState.mostPlayed.indexOf(song) + 1,
-                    onClick = { onSongClick(song) },
-                    onFavoriteClick = { onFavoriteClick(song) },
-                    modifier = Modifier
-                        .padding(horizontal = horizontalPadding)
-                        .animateItemPlacement()
-                )
-            }
+        IconButton(
+            onClick = onSearchClick,
+            modifier = Modifier.size(48.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Default.Search,
+                contentDescription = "Search",
+                tint = MaterialTheme.colorScheme.onSurface
+            )
         }
     }
 }
 
 @Composable
-private fun TrendingSongItem(
-    song: Song,
-    rank: Int,
-    onClick: () -> Unit,
-    onFavoriteClick: () -> Unit,
+private fun WelcomeSection(
+    libraryStats: HomeLibraryStats,
     modifier: Modifier = Modifier
 ) {
     Card(
-        onClick = onClick,
         modifier = modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
-        ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+            containerColor = MaterialTheme.colorScheme.primaryContainer
+        )
     ) {
-        Row(
-            modifier = Modifier.padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
+        Column(
+            modifier = Modifier.padding(16.dp)
         ) {
-            // Rank badge
-            Box(
-                modifier = Modifier
-                    .size(32.dp)
-                    .background(
-                        when (rank) {
-                            1 -> Color(0xFFFFD700) // Gold
-                            2 -> Color(0xFFC0C0C0) // Silver
-                            3 -> Color(0xFFCD7F32) // Bronze
-                            else -> MaterialTheme.colorScheme.primary
-                        },
-                        shape = androidx.compose.foundation.shape.CircleShape
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = rank.toString(),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = Color.White
-                )
-            }
-
-            Spacer(modifier = Modifier.width(12.dp))
-
-            // Album art
-            AlbumArtImage(
-                albumId = song.albumId,
-                contentDescription = "Album art",
-                modifier = Modifier.size(48.dp)
+            Text(
+                text = "Your Music Library",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onPrimaryContainer
             )
 
-            Spacer(modifier = Modifier.width(12.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
-            // Song info
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = song.title,
-                    style = MaterialTheme.typography.titleSmall,
-                    maxLines = 1,
-                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
-                )
-                Text(
-                    text = "${song.displayArtist} • ${song.playCount} plays",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
-                    maxLines = 1,
-                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
-                )
-            }
-
-            // Trending indicator
-            Icon(
-                imageVector = Icons.Default.TrendingUp,
-                contentDescription = "Trending",
-                modifier = Modifier.size(20.dp),
-                tint = MaterialTheme.colorScheme.primary
-            )
-
-            Spacer(modifier = Modifier.width(8.dp))
-
-            // Favorite button
-            IconButton(
-                onClick = onFavoriteClick,
-                modifier = Modifier.size(32.dp)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Icon(
-                    imageVector = if (song.isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                    contentDescription = "Toggle favorite",
-                    modifier = Modifier.size(18.dp),
-                    tint = if (song.isFavorite) androidx.compose.ui.graphics.Color.Red else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                WelcomeStatItem(
+                    label = "Songs",
+                    value = libraryStats.totalSongs.toString(),
+                    icon = Icons.Default.MusicNote
+                )
+                WelcomeStatItem(
+                    label = "Duration",
+                    value = libraryStats.formattedDuration,
+                    icon = Icons.Default.Schedule
+                )
+                WelcomeStatItem(
+                    label = "Artists",
+                    value = libraryStats.totalArtists.toString(),
+                    icon = Icons.Default.Person
                 )
             }
         }
     }
 }
 
-private fun generateRecommendationReason(song: Song, uiState: HomeUiState): String {
-    return when {
-        uiState.featuredArtists.any { it.mediaStoreId == song.artistId } -> "From ${song.displayArtist}"
-        song.playCount > 0 -> "Popular in your library"
-        uiState.recentAlbums.any { it.mediaStoreId == song.albumId } -> "From ${song.displayAlbum}"
-        else -> "Discover new music"
+@Composable
+private fun WelcomeStatItem(
+    label: String,
+    value: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier,
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onPrimaryContainer,
+            modifier = Modifier.size(24.dp)
+        )
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(
+            text = value,
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onPrimaryContainer
+        )
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
+        )
+    }
+}
+
+@Composable
+private fun HomeContentSections(
+    uiState: HomeUiState,
+    onSongClick: (Song) -> Unit,
+    onPlaylistClick: (Playlist) -> Unit,
+    onFavoriteClick: (Song) -> Unit,
+    onSectionHeaderClick: (HomeSection) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(modifier = modifier) {
+        
+        // Recently Added Songs Section
+        if (uiState.recentSongs.isNotEmpty()) {
+            HomeSectionHeader(
+                title = HomeSection.RECENT_SONGS.displayName,
+                subtitle = "${uiState.recentSongs.size} songs",
+                onViewAllClick = { onSectionHeaderClick(HomeSection.RECENT_SONGS) },
+                modifier = Modifier.padding(horizontal = 16.dp)
+            )
+
+            LazyRow(
+                contentPadding = PaddingValues(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                modifier = Modifier.padding(top = 8.dp)
+            ) {
+                items(
+                    items = uiState.recentSongs,
+                    key = { song -> song.id }
+                ) { song ->
+                    RecommendedSongCard(
+                        song = song,
+                        onClick = { onSongClick(song) },
+                        onFavoriteClick = { onFavoriteClick(song) },
+                        isFavorite = uiState.favoriteSongs.any { it.id == song.id },
+                        showRecommendationReason = false,
+                        modifier = Modifier.width(160.dp)
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+        }
+
+        // Favorite Songs Section
+        if (uiState.favoriteSongs.isNotEmpty()) {
+            HomeSectionHeader(
+                title = HomeSection.FAVORITES.displayName,
+                subtitle = "${uiState.favoriteSongs.size} songs",
+                onViewAllClick = { onSectionHeaderClick(HomeSection.FAVORITES) },
+                modifier = Modifier.padding(horizontal = 16.dp)
+            )
+
+            LazyRow(
+                contentPadding = PaddingValues(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                modifier = Modifier.padding(top = 8.dp)
+            ) {
+                items(
+                    items = uiState.favoriteSongs,
+                    key = { song -> song.id }
+                ) { song ->
+                    RecommendedSongCard(
+                        song = song,
+                        onClick = { onSongClick(song) },
+                        onFavoriteClick = { onFavoriteClick(song) },
+                        isFavorite = true,
+                        showRecommendationReason = true,
+                        recommendationReason = "❤️ Your favorite",
+                        modifier = Modifier.width(160.dp)
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+        }
+
+        // Quick Access Playlists Section
+        if (uiState.playlists.isNotEmpty()) {
+            HomeSectionHeader(
+                title = HomeSection.PLAYLISTS.displayName,
+                subtitle = "${uiState.playlists.size} playlists",
+                onViewAllClick = { onSectionHeaderClick(HomeSection.PLAYLISTS) },
+                modifier = Modifier.padding(horizontal = 16.dp)
+            )
+
+            LazyRow(
+                contentPadding = PaddingValues(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                modifier = Modifier.padding(top = 8.dp)
+            ) {
+                items(
+                    items = uiState.playlists,
+                    key = { playlist -> playlist.id }
+                ) { playlist ->
+                    PlaylistQuickAccessCard(
+                        playlist = playlist,
+                        onClick = { onPlaylistClick(playlist) },
+                        modifier = Modifier.width(180.dp)
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+        }
+
+        // Recently Played Section
+        if (uiState.recentlyPlayedSongs.isNotEmpty()) {
+            HomeSectionHeader(
+                title = HomeSection.RECENTLY_PLAYED.displayName,
+                subtitle = "Last ${uiState.recentlyPlayedSongs.size} played",
+                onViewAllClick = { onSectionHeaderClick(HomeSection.RECENTLY_PLAYED) },
+                modifier = Modifier.padding(horizontal = 16.dp)
+            )
+
+            Column(
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                uiState.recentlyPlayedSongs.take(5).forEach { song ->
+                    RecentlyPlayedItem(
+                        song = song,
+                        onClick = { onSongClick(song) },
+                        onFavoriteClick = { onFavoriteClick(song) },
+                        isFavorite = uiState.favoriteSongs.any { it.id == song.id },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+        }
+
+        // Search Results Section (if searching)
+        if (uiState.showSearchResults) {
+            HomeSectionHeader(
+                title = "Search Results",
+                subtitle = "${uiState.searchResults.size} songs found",
+                onViewAllClick = null,
+                modifier = Modifier.padding(horizontal = 16.dp)
+            )
+
+            LazyRow(
+                contentPadding = PaddingValues(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                modifier = Modifier.padding(top = 8.dp)
+            ) {
+                items(
+                    items = uiState.searchResults,
+                    key = { song -> "search_${song.id}" }
+                ) { song ->
+                    RecommendedSongCardCompact(
+                        song = song,
+                        onClick = { onSongClick(song) },
+                        onFavoriteClick = { onFavoriteClick(song) },
+                        isFavorite = uiState.favoriteSongs.any { it.id == song.id },
+                        modifier = Modifier.width(200.dp)
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+        }
+
+        // Empty State
+        if (uiState.isEmpty) {
+            EmptyHomeState(
+                onNavigateToLibrary = onNavigateToLibrary,
+                onRefresh = { onSectionHeaderClick(HomeSection.RECENT_SONGS) },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(32.dp)
+            )
+        }
+    }
+}
+
+@Composable
+private fun ErrorSection(
+    error: String,
+    onRetry: () -> Unit,
+    onClearError: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.errorContainer
+        )
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Icon(
+                imageVector = Icons.Default.Error,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onErrorContainer,
+                modifier = Modifier.size(48.dp)
+            )
+            
+            Spacer(modifier = Modifier.height(8.dp))
+            
+            Text(
+                text = "Something went wrong",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onErrorContainer
+            )
+            
+            Spacer(modifier = Modifier.height(4.dp))
+            
+            Text(
+                text = error,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.8f)
+            )
+            
+            Spacer(modifier = Modifier.height(16.dp))
+            
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                OutlinedButton(
+                    onClick = onClearError,
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        contentColor = MaterialTheme.colorScheme.onErrorContainer
+                    )
+                ) {
+                    Text("Dismiss")
+                }
+                
+                Button(
+                    onClick = onRetry,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.error
+                    )
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Refresh,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Retry")
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun EmptyHomeState(
+    onNavigateToLibrary: () -> Unit,
+    onRefresh: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier,
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Icon(
+            imageVector = Icons.Default.LibraryMusic,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(64.dp)
+        )
+        
+        Spacer(modifier = Modifier.height(16.dp))
+        
+        Text(
+            text = "Your music library is empty",
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+        
+        Spacer(modifier = Modifier.height(4.dp))
+        
+        Text(
+            text = "Add some music to get started and enjoy your favorite tunes",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        
+        Spacer(modifier = Modifier.height(24.dp))
+        
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            OutlinedButton(
+                onClick = onRefresh
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Refresh,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Refresh")
+            }
+            
+            Button(
+                onClick = onNavigateToLibrary
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Add,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Browse Library")
+            }
+        }
+    }
+}
+
+// Helper function for greeting
+private fun getGreeting(): String {
+    val hour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
+    return when (hour) {
+        in 5..11 -> "morning"
+        in 12..16 -> "afternoon"
+        in 17..20 -> "evening"
+        else -> "night"
     }
 }

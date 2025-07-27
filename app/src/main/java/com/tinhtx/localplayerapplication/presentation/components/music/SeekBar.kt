@@ -1,215 +1,234 @@
 package com.tinhtx.localplayerapplication.presentation.components.music
 
-import androidx.compose.animation.core.*
-import androidx.compose.foundation.Canvas
+import androidx.compose.animation.*
 import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.detectDragGestures
-import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import kotlin.math.max
 import kotlin.math.min
 
 @Composable
-fun MusicSeekBar(
+fun SeekBar(
     progress: Float,
-    onProgressChanged: (Float) -> Unit,
+    onSeek: (Float) -> Unit,
     modifier: Modifier = Modifier,
-    currentTime: String = "0:00",
-    totalTime: String = "0:00",
-    showTimeLabels: Boolean = true,
     enabled: Boolean = true,
-    activeColor: Color = MaterialTheme.colorScheme.primary,
-    inactiveColor: Color = MaterialTheme.colorScheme.surfaceVariant,
-    thumbColor: Color = MaterialTheme.colorScheme.primary,
-    thumbSize: androidx.compose.ui.unit.Dp = 20.dp,
-    trackHeight: androidx.compose.ui.unit.Dp = 4.dp
+    bufferedProgress: Float = 0f,
+    showBuffered: Boolean = false,
+    colors: SeekBarColors = SeekBarDefaults.colors()
 ) {
-    Column(modifier = modifier) {
-        // Seek bar
-        CustomSeekBar(
+    val haptic = LocalHapticFeedback.current
+    var isDragging by remember { mutableStateOf(false) }
+    var dragProgress by remember { mutableStateOf(progress) }
+    
+    val currentProgress = if (isDragging) dragProgress else progress
+    
+    Slider(
+        value = currentProgress,
+        onValueChange = { newValue ->
+            dragProgress = newValue
+            if (!isDragging) {
+                isDragging = true
+                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+            }
+        },
+        onValueChangeFinished = {
+            onSeek(dragProgress)
+            isDragging = false
+        },
+        modifier = modifier,
+        enabled = enabled,
+        colors = SliderDefaults.colors(
+            thumbColor = colors.thumbColor,
+            activeTrackColor = colors.activeTrackColor,
+            inactiveTrackColor = colors.inactiveTrackColor,
+            disabledThumbColor = colors.thumbColor.copy(alpha = 0.38f),
+            disabledActiveTrackColor = colors.activeTrackColor.copy(alpha = 0.38f),
+            disabledInactiveTrackColor = colors.inactiveTrackColor.copy(alpha = 0.38f)
+        )
+    )
+}
+
+@Composable
+fun SeekBarWithTime(
+    progress: Float,
+    currentTime: Long,
+    totalTime: Long,
+    onSeek: (Float) -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    bufferedProgress: Float = 0f,
+    showBuffered: Boolean = false
+) {
+    Column(
+        modifier = modifier
+    ) {
+        SeekBar(
             progress = progress,
-            onProgressChanged = onProgressChanged,
+            onSeek = onSeek,
             enabled = enabled,
-            activeColor = activeColor,
-            inactiveColor = inactiveColor,
-            thumbColor = thumbColor,
-            thumbSize = thumbSize,
-            trackHeight = trackHeight,
+            bufferedProgress = bufferedProgress,
+            showBuffered = showBuffered,
             modifier = Modifier.fillMaxWidth()
         )
-
-        // Time labels
-        if (showTimeLabels) {
-            Spacer(modifier = Modifier.height(4.dp))
+        
+        Spacer(modifier = Modifier.height(8.dp))
+        
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text(
+                text = formatTime(currentTime),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
             
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Text(
-                    text = currentTime,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
-                    textAlign = TextAlign.Start
-                )
-
-                Text(
-                    text = totalTime,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
-                    textAlign = TextAlign.End
-                )
-            }
+            Text(
+                text = formatTime(totalTime),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
     }
 }
 
 @Composable
-private fun CustomSeekBar(
+fun CustomSeekBar(
     progress: Float,
-    onProgressChanged: (Float) -> Unit,
+    onSeek: (Float) -> Unit,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
-    activeColor: Color = MaterialTheme.colorScheme.primary,
-    inactiveColor: Color = MaterialTheme.colorScheme.surfaceVariant,
-    thumbColor: Color = MaterialTheme.colorScheme.primary,
+    bufferedProgress: Float = 0f,
+    showBuffered: Boolean = false,
+    height: androidx.compose.ui.unit.Dp = 4.dp,
     thumbSize: androidx.compose.ui.unit.Dp = 20.dp,
-    trackHeight: androidx.compose.ui.unit.Dp = 4.dp
+    colors: SeekBarColors = SeekBarDefaults.colors()
 ) {
     val density = LocalDensity.current
+    val haptic = LocalHapticFeedback.current
+    
     var isDragging by remember { mutableStateOf(false) }
-    var thumbPressed by remember { mutableStateOf(false) }
-
-    // Animation for thumb scale when pressed
-    val thumbScale by animateFloatAsState(
-        targetValue = if (thumbPressed) 1.2f else 1f,
-        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy),
-        label = "thumb_scale"
-    )
-
-    val trackHeightPx = with(density) { trackHeight.toPx() }
-    val thumbSizePx = with(density) { thumbSize.toPx() }
-
-    Canvas(
+    var dragProgress by remember { mutableStateOf(progress) }
+    
+    val currentProgress = if (isDragging) dragProgress else progress
+    
+    BoxWithConstraints(
         modifier = modifier
-            .height(thumbSize + 8.dp)
+            .height(maxOf(height, thumbSize))
             .pointerInput(enabled) {
-                if (!enabled) return@pointerInput
-
-                detectTapGestures(
-                    onPress = { offset ->
-                        thumbPressed = true
-                        val newProgress = (offset.x / size.width).coerceIn(0f, 1f)
-                        onProgressChanged(newProgress)
-                        
-                        tryAwaitRelease()
-                        thumbPressed = false
-                    }
-                )
-            }
-            .pointerInput(enabled) {
-                if (!enabled) return@pointerInput
-
-                detectDragGestures(
-                    onDragStart = { 
-                        isDragging = true
-                        thumbPressed = true
-                    },
-                    onDragEnd = { 
-                        isDragging = false
-                        thumbPressed = false
-                    }
-                ) { _, _ ->
-                    // Drag logic handled in onPress for better UX
+                if (enabled) {
+                    detectHorizontalDragGestures(
+                        onDragStart = { offset ->
+                            isDragging = true
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            val newProgress = (offset.x / size.width).coerceIn(0f, 1f)
+                            dragProgress = newProgress
+                        },
+                        onDragEnd = {
+                            onSeek(dragProgress)
+                            isDragging = false
+                        },
+                        onHorizontalDrag = { _, dragAmount ->
+                            val newProgress = dragProgress + (dragAmount / size.width)
+                            dragProgress = newProgress.coerceIn(0f, 1f)
+                        }
+                    )
                 }
             }
     ) {
-        val centerY = size.height / 2f
-        val trackWidth = size.width - thumbSizePx
-        val activeWidth = trackWidth * progress.coerceIn(0f, 1f)
-        val thumbX = thumbSizePx / 2f + activeWidth
-
-        // Draw inactive track
-        drawLine(
-            color = inactiveColor,
-            start = Offset(thumbSizePx / 2f, centerY),
-            end = Offset(size.width - thumbSizePx / 2f, centerY),
-            strokeWidth = trackHeightPx,
-            cap = StrokeCap.Round
-        )
-
-        // Draw active track
-        if (activeWidth > 0f) {
-            drawLine(
-                color = activeColor,
-                start = Offset(thumbSizePx / 2f, centerY),
-                end = Offset(thumbX, centerY),
-                strokeWidth = trackHeightPx,
-                cap = StrokeCap.Round
-            )
-        }
-
-        // Draw thumb
-        drawCircle(
-            color = thumbColor,
-            radius = (thumbSizePx / 2f) * thumbScale,
-            center = Offset(thumbX, centerY)
-        )
-
-        // Draw thumb shadow/glow when pressed
-        if (thumbPressed) {
-            drawCircle(
-                color = thumbColor.copy(alpha = 0.2f),
-                radius = (thumbSizePx / 2f) * thumbScale * 1.5f,
-                center = Offset(thumbX, centerY)
-            )
-        }
-    }
-}
-
-@Composable
-fun CompactSeekBar(
-    progress: Float,
-    onProgressChanged: (Float) -> Unit,
-    modifier: Modifier = Modifier,
-    enabled: Boolean = true,
-    activeColor: Color = MaterialTheme.colorScheme.primary,
-    inactiveColor: Color = MaterialTheme.colorScheme.surfaceVariant
-) {
-    Box(
-        modifier = modifier
-            .height(4.dp)
-            .clip(CircleShape)
-            .background(inactiveColor)
-            .pointerInput(enabled) {
-                if (!enabled) return@pointerInput
-
-                detectTapGestures { offset ->
-                    val newProgress = (offset.x / size.width).coerceIn(0f, 1f)
-                    onProgressChanged(newProgress)
-                }
-            }
-    ) {
+        val trackWidth = maxWidth
+        val trackHeight = height
+        val progressWidth = trackWidth * currentProgress
+        val bufferedWidth = if (showBuffered) trackWidth * bufferedProgress else 0.dp
+        
         Box(
             modifier = Modifier
-                .fillMaxHeight()
-                .fillMaxWidth(progress.coerceIn(0f, 1f))
-                .background(activeColor, CircleShape)
-        )
+                .fillMaxWidth()
+                .align(Alignment.Center),
+            contentAlignment = Alignment.CenterStart
+        ) {
+            // Background track
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(trackHeight)
+                    .clip(RoundedCornerShape(trackHeight / 2))
+                    .background(colors.inactiveTrackColor)
+            )
+            
+            // Buffered track
+            if (showBuffered && bufferedWidth > 0.dp) {
+                Box(
+                    modifier = Modifier
+                        .width(bufferedWidth)
+                        .height(trackHeight)
+                        .clip(RoundedCornerShape(trackHeight / 2))
+                        .background(colors.bufferedTrackColor)
+                )
+            }
+            
+            // Progress track
+            Box(
+                modifier = Modifier
+                    .width(progressWidth)
+                    .height(trackHeight)
+                    .clip(RoundedCornerShape(trackHeight / 2))
+                    .background(
+                        if (colors.activeTrackColor is Color) {
+                            colors.activeTrackColor
+                        } else {
+                            Brush.horizontalGradient(
+                                colors = listOf(
+                                    MaterialTheme.colorScheme.primary,
+                                    MaterialTheme.colorScheme.secondary
+                                )
+                            )
+                        }
+                    )
+            )
+            
+            // Thumb
+            Box(
+                modifier = Modifier
+                    .offset(x = progressWidth - thumbSize / 2)
+                    .size(thumbSize)
+                    .clip(CircleShape)
+                    .background(colors.thumbColor),
+                contentAlignment = Alignment.Center
+            ) {
+                // Inner circle for visual feedback when dragging
+                AnimatedVisibility(
+                    visible = isDragging,
+                    enter = scaleIn() + fadeIn(),
+                    exit = scaleOut() + fadeOut()
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(thumbSize * 0.6f)
+                            .background(
+                                colors.thumbColor.copy(alpha = 0.3f),
+                                CircleShape
+                            )
+                    )
+                }
+            }
+        }
     }
 }
 
@@ -217,53 +236,131 @@ fun CompactSeekBar(
 fun WaveformSeekBar(
     progress: Float,
     waveformData: List<Float>,
-    onProgressChanged: (Float) -> Unit,
+    onSeek: (Float) -> Unit,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
-    activeColor: Color = MaterialTheme.colorScheme.primary,
-    inactiveColor: Color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-    barWidth: androidx.compose.ui.unit.Dp = 2.dp,
-    maxHeight: androidx.compose.ui.unit.Dp = 40.dp
+    colors: SeekBarColors = SeekBarDefaults.colors()
 ) {
-    val density = LocalDensity.current
-    val barWidthPx = with(density) { barWidth.toPx() }
-    val maxHeightPx = with(density) { maxHeight.toPx() }
-
-    Canvas(
+    val haptic = LocalHapticFeedback.current
+    var isDragging by remember { mutableStateOf(false) }
+    var dragProgress by remember { mutableStateOf(progress) }
+    
+    val currentProgress = if (isDragging) dragProgress else progress
+    
+    BoxWithConstraints(
         modifier = modifier
-            .height(maxHeight)
+            .height(60.dp)
             .pointerInput(enabled) {
-                if (!enabled) return@pointerInput
-
-                detectTapGestures { offset ->
-                    val newProgress = (offset.x / size.width).coerceIn(0f, 1f)
-                    onProgressChanged(newProgress)
+                if (enabled) {
+                    detectHorizontalDragGestures(
+                        onDragStart = { offset ->
+                            isDragging = true
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            val newProgress = (offset.x / size.width).coerceIn(0f, 1f)
+                            dragProgress = newProgress
+                        },
+                        onDragEnd = {
+                            onSeek(dragProgress)
+                            isDragging = false
+                        },
+                        onHorizontalDrag = { _, dragAmount ->
+                            val newProgress = dragProgress + (dragAmount / size.width)
+                            dragProgress = newProgress.coerceIn(0f, 1f)
+                        }
+                    )
                 }
             }
     ) {
-        val barCount = (size.width / (barWidthPx + 2.dp.toPx())).toInt()
-        val progressBarIndex = (barCount * progress).toInt()
-
-        repeat(barCount) { index ->
-            val x = index * (barWidthPx + 2.dp.toPx()) + barWidthPx / 2f
-            val dataIndex = (index.toFloat() / barCount * waveformData.size).toInt()
-                .coerceIn(0, waveformData.size - 1)
-            
-            val barHeight = if (waveformData.isNotEmpty()) {
-                waveformData[dataIndex] * maxHeightPx
-            } else {
-                maxHeightPx * 0.3f // Default height if no data
+        val barWidth = maxWidth / waveformData.size
+        val progressIndex = (currentProgress * waveformData.size).toInt()
+        
+        Row(
+            modifier = Modifier.fillMaxSize(),
+            horizontalArrangement = Arrangement.spacedBy(1.dp),
+            verticalAlignment = Alignment.Bottom
+        ) {
+            waveformData.forEachIndexed { index, amplitude ->
+                val isPlayed = index <= progressIndex
+                val barHeight = (amplitude * 50.dp).coerceAtLeast(2.dp)
+                
+                Box(
+                    modifier = Modifier
+                        .width(barWidth)
+                        .height(barHeight)
+                        .background(
+                            if (isPlayed) colors.activeTrackColor else colors.inactiveTrackColor,
+                            RoundedCornerShape(1.dp)
+                        )
+                )
             }
-
-            val color = if (index <= progressBarIndex) activeColor else inactiveColor
-
-            drawLine(
-                color = color,
-                start = Offset(x, size.height / 2f - barHeight / 2f),
-                end = Offset(x, size.height / 2f + barHeight / 2f),
-                strokeWidth = barWidthPx,
-                cap = StrokeCap.Round
-            )
         }
     }
+}
+
+@Composable
+fun CircularSeekBar(
+    progress: Float,
+    onSeek: (Float) -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    strokeWidth: androidx.compose.ui.unit.Dp = 8.dp,
+    colors: SeekBarColors = SeekBarDefaults.colors()
+) {
+    // TODO: Implement circular seek bar
+    // This would require custom drawing using Canvas
+    Box(
+        modifier = modifier.size(200.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = "${(progress * 100).toInt()}%",
+            style = MaterialTheme.typography.headlineMedium,
+            fontWeight = FontWeight.Bold
+        )
+    }
+}
+
+@Composable
+fun MinimalSeekBar(
+    progress: Float,
+    onSeek: (Float) -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true
+) {
+    LinearProgressIndicator(
+        progress = progress,
+        modifier = modifier,
+        color = MaterialTheme.colorScheme.primary,
+        trackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
+    )
+}
+
+// Colors and defaults
+data class SeekBarColors(
+    val thumbColor: Color,
+    val activeTrackColor: Color,
+    val inactiveTrackColor: Color,
+    val bufferedTrackColor: Color = inactiveTrackColor.copy(alpha = 0.5f)
+)
+
+object SeekBarDefaults {
+    @Composable
+    fun colors(
+        thumbColor: Color = MaterialTheme.colorScheme.primary,
+        activeTrackColor: Color = MaterialTheme.colorScheme.primary,
+        inactiveTrackColor: Color = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f),
+        bufferedTrackColor: Color = inactiveTrackColor.copy(alpha = 0.5f)
+    ) = SeekBarColors(
+        thumbColor = thumbColor,
+        activeTrackColor = activeTrackColor,
+        inactiveTrackColor = inactiveTrackColor,
+        bufferedTrackColor = bufferedTrackColor
+    )
+}
+
+private fun formatTime(timeMs: Long): String {
+    val totalSeconds = timeMs / 1000
+    val minutes = totalSeconds / 60
+    val seconds = totalSeconds % 60
+    return String.format("%d:%02d", minutes, seconds)
 }

@@ -1,581 +1,600 @@
 package com.tinhtx.localplayerapplication.core.worker
 
-import android.app.NotificationManager
 import android.content.Context
-import android.content.pm.PackageManager
-import android.database.Cursor
-import android.net.Uri
 import android.provider.MediaStore
-import androidx.core.app.NotificationCompat
-import androidx.core.content.ContextCompat
 import androidx.hilt.work.HiltWorker
 import androidx.work.*
-import com.tinhtx.localplayerapplication.R
 import com.tinhtx.localplayerapplication.core.constants.AppConstants
-import com.tinhtx.localplayerapplication.data.database.entity.*
-import com.tinhtx.localplayerapplication.data.repository.MusicRepository
-import com.tinhtx.localplayerapplication.domain.model.*
+import com.tinhtx.localplayerapplication.core.constants.MediaConstants
+import com.tinhtx.localplayerapplication.core.utils.MediaUtils
+import com.tinhtx.localplayerapplication.core.utils.PermissionUtils
+import com.tinhtx.localplayerapplication.data.local.media.MediaStoreScanner
+import com.tinhtx.localplayerapplication.domain.model.Album
+import com.tinhtx.localplayerapplication.domain.model.Artist
+import com.tinhtx.localplayerapplication.domain.model.Song
+import com.tinhtx.localplayerapplication.domain.repository.MusicRepository
+import com.tinhtx.localplayerapplication.domain.repository.SettingsRepository
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
-import kotlinx.coroutines.delay
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import timber.log.Timber
-import java.io.File
 import java.util.concurrent.TimeUnit
 
+/**
+ * Worker for scanning music library and updating database
+ */
 @HiltWorker
 class LibraryScanWorker @AssistedInject constructor(
-    @Assisted context: Context,
-    @Assisted workerParams: WorkerParameters,
-    private val musicRepository: MusicRepository
+    @Assisted private val context: Context,
+    @Assisted private val workerParams: WorkerParameters,
+    private val musicRepository: MusicRepository,
+    private val settingsRepository: SettingsRepository,
+    private val mediaStoreScanner: MediaStoreScanner
 ) : CoroutineWorker(context, workerParams) {
 
-    private val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-    private val notificationId = 1001
-
     companion object {
-        const val TAG = "LibraryScanWorker"
-        const val WORK_NAME = "library_scan_work"
-        const val PERIODIC_WORK_NAME = "periodic_library_scan_work"
+        private const val TAG = "LibraryScanWorker"
+        private const val WORK_NAME = AppConstants.LIBRARY_SCAN_WORK_NAME
         
         // Input data keys
-        const val KEY_FORCE_SCAN = "force_scan"
-        const val KEY_SCAN_FOLDERS = "scan_folders"
+        const val KEY_FORCE_FULL_SCAN = "force_full_scan"
+        const val KEY_SCAN_SPECIFIC_FOLDERS = "scan_specific_folders"
         
-        // Progress data keys
-        const val KEY_PROGRESS = "progress"
-        const val KEY_CURRENT_FILE = "current_file"
-        const val KEY_TOTAL_FILES = "total_files"
-        const val KEY_SCANNED_FILES = "scanned_files"
-        
-        // Result data keys
-        const val KEY_SONGS_ADDED = "songs_added"
-        const val KEY_SONGS_UPDATED = "songs_updated"
-        const val KEY_SONGS_REMOVED = "songs_removed"
-        const val KEY_ALBUMS_ADDED = "albums_added"
-        const val KEY_ARTISTS_ADDED = "artists_added"
-        const val KEY_SCAN_DURATION = "scan_duration"
-
         /**
-         * Schedule one-time library scan
+         * Schedule periodic library scan
          */
-        fun scheduleWork(
-            context: Context,
-            forceScan: Boolean = false,
-            customFolders: List<String>? = null
-        ): String {
-            val inputData = Data.Builder()
-                .putBoolean(KEY_FORCE_SCAN, forceScan)
-                .apply {
-                    customFolders?.let { folders ->
-                        putStringArray(KEY_SCAN_FOLDERS, folders.toTypedArray())
-                    }
-                }
-                .build()
-
+        fun schedulePeriodicWork(context: Context) {
             val constraints = Constraints.Builder()
-                .setRequiredNetworkType(NetworkType.NOT_REQUIRED)
                 .setRequiresBatteryNotLow(true)
                 .setRequiresStorageNotLow(true)
                 .build()
 
-            val workRequest = OneTimeWorkRequestBuilder<LibraryScanWorker>()
+            val periodicRequest = PeriodicWorkRequestBuilder<LibraryScanWorker>(
+                AppConstants.SCAN_INTERVAL_HOURS.toLong(), TimeUnit.HOURS,
+                30, TimeUnit.MINUTES // Flex interval
+            )
+                .setConstraints(constraints)
+                .setBackoffCriteria(
+                    BackoffPolicy.LINEAR,
+                    WorkRequest.MIN_BACKOFF_MILLIS,
+                    TimeUnit.MILLISECONDS
+                )
+                .addTag(TAG)
+                .build()
+
+            WorkManager.getInstance(context)
+                .enqueueUniquePeriodicWork(
+                    WORK_NAME,
+                    ExistingPeriodicWorkPolicy.KEEP,
+                    periodicRequest
+                )
+        }
+
+        /**
+         * Schedule immediate library scan
+         */
+        fun scheduleImmediateScan(context: Context, forceFullScan: Boolean = false) {
+            val constraints = Constraints.Builder()
+                .setRequiresStorageNotLow(true)
+                .build()
+
+            val inputData = Data.Builder()
+                .putBoolean(KEY_FORCE_FULL_SCAN, forceFullScan)
+                .build()
+
+            val immediateRequest = OneTimeWorkRequestBuilder<LibraryScanWorker>()
                 .setConstraints(constraints)
                 .setInputData(inputData)
                 .addTag(TAG)
                 .build()
 
             WorkManager.getInstance(context)
-                .enqueueUniqueWork(WORK_NAME, ExistingWorkPolicy.REPLACE, workRequest)
-
-            Timber.d("$TAG - One-time scan work scheduled, forceScan: $forceScan")
-            return workRequest.id.toString()
+                .enqueueUniqueWork(
+                    "${WORK_NAME}_immediate",
+                    ExistingWorkPolicy.REPLACE,
+                    immediateRequest
+                )
         }
 
         /**
-         * Schedule periodic library scan
+         * Schedule scan for specific folders
          */
-        fun schedulePeriodicWork(context: Context) {
+        fun scheduleFolderScan(context: Context, folders: List<String>) {
             val constraints = Constraints.Builder()
-                .setRequiredNetworkType(NetworkType.NOT_REQUIRED)
-                .setRequiresBatteryNotLow(true)
                 .setRequiresStorageNotLow(true)
-                .setRequiresDeviceIdle(true)
                 .build()
 
-            val periodicWorkRequest = PeriodicWorkRequestBuilder<LibraryScanWorker>(
-                repeatInterval = 6, // 6 hours
-                repeatIntervalTimeUnit = TimeUnit.HOURS,
-                flexTimeInterval = 1, // 1 hour flex
-                flexTimeIntervalUnit = TimeUnit.HOURS
-            )
+            val inputData = Data.Builder()
+                .putStringArray(KEY_SCAN_SPECIFIC_FOLDERS, folders.toTypedArray())
+                .build()
+
+            val folderScanRequest = OneTimeWorkRequestBuilder<LibraryScanWorker>()
                 .setConstraints(constraints)
+                .setInputData(inputData)
                 .addTag(TAG)
                 .build()
 
             WorkManager.getInstance(context)
-                .enqueueUniquePeriodicWork(
-                    PERIODIC_WORK_NAME,
-                    ExistingPeriodicWorkPolicy.KEEP,
-                    periodicWorkRequest
+                .enqueueUniqueWork(
+                    "${WORK_NAME}_folder_scan",
+                    ExistingWorkPolicy.REPLACE,
+                    folderScanRequest
                 )
-
-            Timber.d("$TAG - Periodic scan work scheduled")
         }
 
         /**
-         * Cancel all scan work
+         * Cancel library scan work
          */
         fun cancelWork(context: Context) {
             WorkManager.getInstance(context).cancelUniqueWork(WORK_NAME)
-            WorkManager.getInstance(context).cancelUniqueWork(PERIODIC_WORK_NAME)
-            Timber.d("$TAG - All scan work cancelled")
         }
     }
 
-    override suspend fun doWork(): Result {
-        Timber.d("$TAG - Starting library scan")
-        
-        val startTime = System.currentTimeMillis()
-        var scanResult = ScanResult()
+    override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
+        return@withContext try {
+            Timber.d("$TAG - Starting library scan")
 
-        return try {
             // Check permissions
             if (!hasRequiredPermissions()) {
-                Timber.w("$TAG - Missing required permissions")
-                return Result.failure(createErrorData("Missing storage permissions"))
+                Timber.w("$TAG - Missing required permissions for library scan")
+                return@withContext Result.failure()
             }
 
-            // Show notification
-            showScanStartNotification()
+            // Check if auto scan is enabled
+            val librarySettings = settingsRepository.getLibrarySettings()
+            if (!librarySettings.autoScan && !isManualScan()) {
+                Timber.d("$TAG - Auto scan disabled, skipping")
+                return@withContext Result.success()
+            }
 
-            // Set initial progress
-            setProgress(createProgressData(0, "Preparing scan...", 0, 0))
+            // Perform library scan
+            val scanResults = performLibraryScan()
+            
+            // Update repository statistics
+            updateRepositoryStatistics()
+            
+            // Log scan results
+            logScanResults(scanResults)
 
-            // Get scan parameters
-            val forceScan = inputData.getBoolean(KEY_FORCE_SCAN, false)
-            val customFolders = inputData.getStringArray(KEY_SCAN_FOLDERS)?.toList()
-
-            // Perform scan
-            scanResult = performLibraryScan(forceScan, customFolders)
-
-            val scanDuration = System.currentTimeMillis() - startTime
-
-            // Show completion notification
-            showScanCompleteNotification(scanResult, scanDuration)
-
-            // Create result data
-            val resultData = Data.Builder()
-                .putInt(KEY_SONGS_ADDED, scanResult.songsAdded)
-                .putInt(KEY_SONGS_UPDATED, scanResult.songsUpdated)
-                .putInt(KEY_SONGS_REMOVED, scanResult.songsRemoved)
-                .putInt(KEY_ALBUMS_ADDED, scanResult.albumsAdded)
-                .putInt(KEY_ARTISTS_ADDED, scanResult.artistsAdded)
-                .putLong(KEY_SCAN_DURATION, scanDuration)
-                .build()
-
-            Timber.i("$TAG - Scan completed successfully in ${scanDuration}ms: $scanResult")
-            Result.success(resultData)
+            Timber.d("$TAG - Library scan completed successfully")
+            Result.success()
 
         } catch (exception: Exception) {
-            Timber.e(exception, "$TAG - Scan failed")
+            Timber.e(exception, "$TAG - Error during library scan")
             
-            showScanErrorNotification(exception.message ?: "Unknown error")
-            
-            Result.failure(createErrorData(exception.message ?: "Scan failed"))
-        } finally {
-            // Clean up notification
-            delay(5000) // Keep notification for 5 seconds
-            notificationManager.cancel(notificationId)
-        }
-    }
-
-    private suspend fun performLibraryScan(
-        forceScan: Boolean,
-        customFolders: List<String>?
-    ): ScanResult {
-        val scanResult = ScanResult()
-        
-        // Get current library state
-        val existingSongs = if (forceScan) {
-            emptyMap()
-        } else {
-            musicRepository.getAllSongs().associateBy { it.path }
-        }
-
-        // Scan audio files
-        val audioFiles = scanAudioFiles(customFolders)
-        val totalFiles = audioFiles.size
-
-        setProgress(createProgressData(5, "Found $totalFiles audio files", 0, totalFiles))
-
-        // Process files
-        audioFiles.forEachIndexed { index, audioFile ->
-            try {
-                val progress = ((index + 1) * 90 / totalFiles) + 5 // 5-95%
-                setProgress(createProgressData(
-                    progress,
-                    "Processing: ${audioFile.displayName}",
-                    index + 1,
-                    totalFiles
-                ))
-
-                processAudioFile(audioFile, existingSongs, scanResult)
-                
-                // Small delay to prevent overwhelming the system
-                if (index % 50 == 0) {
-                    delay(100)
-                }
-
-            } catch (exception: Exception) {
-                Timber.w(exception, "$TAG - Error processing file: ${audioFile.data}")
-            }
-        }
-
-        // Clean up removed files
-        if (!forceScan) {
-            setProgress(createProgressData(95, "Cleaning up removed files...", totalFiles, totalFiles))
-            cleanupRemovedFiles(audioFiles, existingSongs, scanResult)
-        }
-
-        // Update statistics
-        setProgress(createProgressData(98, "Updating statistics...", totalFiles, totalFiles))
-        updateLibraryStatistics()
-
-        setProgress(createProgressData(100, "Scan completed", totalFiles, totalFiles))
-
-        return scanResult
-    }
-
-    private suspend fun scanAudioFiles(customFolders: List<String>?): List<AudioFileData> {
-        val audioFiles = mutableListOf<AudioFileData>()
-        
-        val projection = arrayOf(
-            MediaStore.Audio.Media._ID,
-            MediaStore.Audio.Media.DATA,
-            MediaStore.Audio.Media.TITLE,
-            MediaStore.Audio.Media.ARTIST,
-            MediaStore.Audio.Media.ALBUM,
-            MediaStore.Audio.Media.ALBUM_ID,
-            MediaStore.Audio.Media.DURATION,
-            MediaStore.Audio.Media.SIZE,
-            MediaStore.Audio.Media.MIME_TYPE,
-            MediaStore.Audio.Media.DATE_ADDED,
-            MediaStore.Audio.Media.DATE_MODIFIED,
-            MediaStore.Audio.Media.YEAR,
-            MediaStore.Audio.Media.TRACK,
-            MediaStore.Audio.Media.COMPOSER,
-            MediaStore.Audio.Media.GENRE
-        )
-
-        val selection = StringBuilder().apply {
-            append("${MediaStore.Audio.Media.IS_MUSIC} = 1")
-            append(" AND ${MediaStore.Audio.Media.DURATION} > 10000") // > 10 seconds
-            
-            // Filter by custom folders if specified
-            customFolders?.let { folders ->
-                append(" AND (")
-                folders.forEachIndexed { index, folder ->
-                    if (index > 0) append(" OR ")
-                    append("${MediaStore.Audio.Media.DATA} LIKE '$folder%'")
-                }
-                append(")")
-            }
-        }.toString()
-
-        val sortOrder = "${MediaStore.Audio.Media.TITLE} ASC"
-
-        applicationContext.contentResolver.query(
-            MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
-            projection,
-            selection,
-            null,
-            sortOrder
-        )?.use { cursor ->
-            audioFiles.addAll(processMediaStoreCursor(cursor))
-        }
-
-        return audioFiles
-    }
-
-    private fun processMediaStoreCursor(cursor: Cursor): List<AudioFileData> {
-        val audioFiles = mutableListOf<AudioFileData>()
-        
-        val idColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media._ID)
-        val dataColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DATA)
-        val titleColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.TITLE)
-        val artistColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ARTIST)
-        val albumColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM)
-        val albumIdColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM_ID)
-        val durationColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DURATION)
-        val sizeColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.SIZE)
-        val mimeTypeColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.MIME_TYPE)
-        val dateAddedColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DATE_ADDED)
-        val dateModifiedColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DATE_MODIFIED)
-        val yearColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.YEAR)
-        val trackColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.TRACK)
-
-        while (cursor.moveToNext()) {
-            val filePath = cursor.getString(dataColumn)
-            
-            // Verify file exists
-            if (!File(filePath).exists()) continue
-
-            val audioFile = AudioFileData(
-                mediaStoreId = cursor.getLong(idColumn),
-                path = filePath,
-                title = cursor.getString(titleColumn) ?: File(filePath).nameWithoutExtension,
-                artist = cursor.getString(artistColumn) ?: "Unknown Artist",
-                album = cursor.getString(albumColumn) ?: "Unknown Album",
-                albumId = cursor.getLong(albumIdColumn),
-                duration = cursor.getLong(durationColumn),
-                size = cursor.getLong(sizeColumn),
-                mimeType = cursor.getString(mimeTypeColumn) ?: "",
-                dateAdded = cursor.getLong(dateAddedColumn) * 1000, // Convert to milliseconds
-                dateModified = cursor.getLong(dateModifiedColumn) * 1000,
-                year = cursor.getInt(yearColumn),
-                trackNumber = cursor.getInt(trackColumn),
-                displayName = File(filePath).name
-            )
-            
-            audioFiles.add(audioFile)
-        }
-
-        return audioFiles
-    }
-
-    private suspend fun processAudioFile(
-        audioFile: AudioFileData,
-        existingSongs: Map<String, Song>,
-        scanResult: ScanResult
-    ) {
-        val existingSong = existingSongs[audioFile.path]
-        
-        if (existingSong == null) {
-            // New song - add to database
-            val song = createSongFromAudioFile(audioFile)
-            musicRepository.insertSong(song)
-            scanResult.songsAdded++
-            
-            // Process artist and album
-            processArtistAndAlbum(audioFile, scanResult)
-            
-        } else if (shouldUpdateSong(existingSong, audioFile)) {
-            // Existing song - check if update needed
-            val updatedSong = updateSongFromAudioFile(existingSong, audioFile)
-            musicRepository.updateSong(updatedSong)
-            scanResult.songsUpdated++
-        }
-    }
-
-    private suspend fun processArtistAndAlbum(audioFile: AudioFileData, scanResult: ScanResult) {
-        // Process artist
-        val existingArtist = musicRepository.getArtistByName(audioFile.artist)
-        if (existingArtist == null) {
-            val artist = Artist(
-                id = 0,
-                name = audioFile.artist,
-                albumCount = 0,
-                songCount = 0
-            )
-            musicRepository.insertArtist(artist)
-            scanResult.artistsAdded++
-        }
-
-        // Process album
-        val existingAlbum = musicRepository.getAlbumByNameAndArtist(audioFile.album, audioFile.artist)
-        if (existingAlbum == null) {
-            val album = Album(
-                id = 0,
-                mediaStoreId = audioFile.albumId,
-                name = audioFile.album,
-                artist = audioFile.artist,
-                artistId = 0, // Will be updated later
-                year = audioFile.year,
-                songCount = 0
-            )
-            musicRepository.insertAlbum(album)
-            scanResult.albumsAdded++
-        }
-    }
-
-    private suspend fun cleanupRemovedFiles(
-        scannedFiles: List<AudioFileData>,
-        existingSongs: Map<String, Song>,
-        scanResult: ScanResult
-    ) {
-        val scannedPaths = scannedFiles.map { it.path }.toSet()
-        
-        existingSongs.keys.forEach { path ->
-            if (path !in scannedPaths) {
-                // File no longer exists - remove from database
-                musicRepository.deleteSongByPath(path)
-                scanResult.songsRemoved++
+            if (runAttemptCount < 3) {
+                Result.retry()
+            } else {
+                Result.failure()
             }
         }
     }
 
-    private suspend fun updateLibraryStatistics() {
-        // Update artist song counts
-        musicRepository.updateArtistStatistics()
-        
-        // Update album song counts
-        musicRepository.updateAlbumStatistics()
-        
-        // Update genre statistics
-        musicRepository.updateGenreStatistics()
-    }
-
-    private fun createSongFromAudioFile(audioFile: AudioFileData): Song {
-        return Song(
-            id = 0,
-            mediaStoreId = audioFile.mediaStoreId,
-            title = audioFile.title,
-            artist = audioFile.artist,
-            album = audioFile.album,
-            albumId = audioFile.albumId,
-            duration = audioFile.duration,
-            path = audioFile.path,
-            size = audioFile.size,
-            mimeType = audioFile.mimeType,
-            dateAdded = audioFile.dateAdded,
-            dateModified = audioFile.dateModified,
-            year = audioFile.year,
-            trackNumber = audioFile.trackNumber,
-            genre = null, // Will be populated later if available
-            isFavorite = false,
-            playCount = 0,
-            lastPlayed = 0L
-        )
-    }
-
-    private fun updateSongFromAudioFile(existingSong: Song, audioFile: AudioFileData): Song {
-        return existingSong.copy(
-            title = audioFile.title,
-            artist = audioFile.artist,
-            album = audioFile.album,
-            albumId = audioFile.albumId,
-            duration = audioFile.duration,
-            size = audioFile.size,
-            mimeType = audioFile.mimeType,
-            dateModified = audioFile.dateModified,
-            year = audioFile.year,
-            trackNumber = audioFile.trackNumber
-        )
-    }
-
-    private fun shouldUpdateSong(existingSong: Song, audioFile: AudioFileData): Boolean {
-        return existingSong.dateModified < audioFile.dateModified ||
-               existingSong.title != audioFile.title ||
-               existingSong.artist != audioFile.artist ||
-               existingSong.album != audioFile.album ||
-               existingSong.duration != audioFile.duration
-    }
-
+    /**
+     * Check if required permissions are granted
+     */
     private fun hasRequiredPermissions(): Boolean {
-        return ContextCompat.checkSelfPermission(
-            applicationContext,
-            android.Manifest.permission.READ_EXTERNAL_STORAGE
-        ) == PackageManager.PERMISSION_GRANTED
+        return PermissionUtils.hasStoragePermissions(context)
     }
 
-    private fun showScanStartNotification() {
-        val notification = NotificationCompat.Builder(applicationContext, AppConstants.Notifications.SCAN_CHANNEL_ID)
-            .setContentTitle("Scanning Music Library")
-            .setContentText("Starting music library scan...")
-            .setSmallIcon(R.drawable.ic_refresh)
-            .setOngoing(true)
-            .setProgress(100, 0, false)
-            .setPriority(NotificationCompat.PRIORITY_LOW)
-            .build()
-
-        notificationManager.notify(notificationId, notification)
+    /**
+     * Check if this is a manual scan (immediate or forced)
+     */
+    private fun isManualScan(): Boolean {
+        return inputData.getBoolean(KEY_FORCE_FULL_SCAN, false) ||
+               inputData.getStringArray(KEY_SCAN_SPECIFIC_FOLDERS) != null
     }
 
-    private fun showScanCompleteNotification(scanResult: ScanResult, duration: Long) {
-        val durationText = "${duration / 1000}s"
-        val resultText = buildString {
-            if (scanResult.songsAdded > 0) append("${scanResult.songsAdded} added")
-            if (scanResult.songsUpdated > 0) {
-                if (isNotEmpty()) append(", ")
-                append("${scanResult.songsUpdated} updated")
+    /**
+     * Perform comprehensive library scan
+     */
+    private suspend fun performLibraryScan(): ScanResults {
+        val results = ScanResults()
+        val startTime = System.currentTimeMillis()
+        
+        try {
+            // Determine scan type
+            val forceFullScan = inputData.getBoolean(KEY_FORCE_FULL_SCAN, false)
+            val specificFolders = inputData.getStringArray(KEY_SCAN_SPECIFIC_FOLDERS)
+            
+            when {
+                specificFolders != null -> {
+                    Timber.d("$TAG - Performing folder-specific scan")
+                    results.merge(scanSpecificFolders(specificFolders.toList()))
+                }
+                forceFullScan -> {
+                    Timber.d("$TAG - Performing full library scan")
+                    results.merge(performFullScan())
+                }
+                else -> {
+                    Timber.d("$TAG - Performing incremental scan")
+                    results.merge(performIncrementalScan())
+                }
             }
-            if (scanResult.songsRemoved > 0) {
-                if (isNotEmpty()) append(", ")
-                append("${scanResult.songsRemoved} removed")
-            }
-            if (isEmpty()) append("No changes")
+            
+            results.scanDurationMs = System.currentTimeMillis() - startTime
+            
+        } catch (exception: Exception) {
+            Timber.e(exception, "$TAG - Error in library scan operations")
+            throw exception
         }
-
-        val notification = NotificationCompat.Builder(applicationContext, AppConstants.Notifications.SCAN_CHANNEL_ID)
-            .setContentTitle("Library Scan Complete")
-            .setContentText("$resultText in $durationText")
-            .setSmallIcon(R.drawable.ic_check)
-            .setPriority(NotificationCompat.PRIORITY_LOW)
-            .setAutoCancel(true)
-            .build()
-
-        notificationManager.notify(notificationId, notification)
+        
+        return results
     }
 
-    private fun showScanErrorNotification(error: String) {
-        val notification = NotificationCompat.Builder(applicationContext, AppConstants.Notifications.ERROR_CHANNEL_ID)
-            .setContentTitle("Library Scan Failed")
-            .setContentText(error)
-            .setSmallIcon(R.drawable.ic_error)
-            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
-            .setAutoCancel(true)
-            .build()
-
-        notificationManager.notify(notificationId, notification)
+    /**
+     * Perform full library scan
+     */
+    private suspend fun performFullScan(): ScanResults {
+        val results = ScanResults()
+        
+        try {
+            // Get all songs from MediaStore
+            val mediaStoreSongs = mediaStoreScanner.getAllSongs()
+            Timber.d("$TAG - Found ${mediaStoreSongs.size} songs in MediaStore")
+            
+            // Process songs, albums, and artists
+            val processedData = processScanData(mediaStoreSongs)
+            
+            // Update database
+            updateDatabase(processedData, isFullScan = true)
+            
+            results.songsFound = mediaStoreSongs.size
+            results.songsAdded = processedData.newSongs.size
+            results.albumsAdded = processedData.newAlbums.size
+            results.artistsAdded = processedData.newArtists.size
+            results.songsRemoved = processedData.removedSongs.size
+            
+        } catch (exception: Exception) {
+            Timber.e(exception, "$TAG - Error in full scan")
+            throw exception
+        }
+        
+        return results
     }
 
-    private fun createProgressData(
-        progress: Int,
-        message: String,
-        scannedFiles: Int,
-        totalFiles: Int
-    ): Data {
-        return Data.Builder()
-            .putInt(KEY_PROGRESS, progress)
-            .putString(KEY_CURRENT_FILE, message)
-            .putInt(KEY_SCANNED_FILES, scannedFiles)
-            .putInt(KEY_TOTAL_FILES, totalFiles)
-            .build()
+    /**
+     * Perform incremental scan (only changed files)
+     */
+    private suspend fun performIncrementalScan(): ScanResults {
+        val results = ScanResults()
+        
+        try {
+            // Get last scan time
+            val lastScanTime = getLastScanTime()
+            
+            // Get only modified songs from MediaStore
+            val modifiedSongs = mediaStoreScanner.getModifiedSongs(lastScanTime)
+            Timber.d("$TAG - Found ${modifiedSongs.size} modified songs since last scan")
+            
+            if (modifiedSongs.isNotEmpty()) {
+                // Process only modified data
+                val processedData = processScanData(modifiedSongs)
+                
+                // Update database incrementally
+                updateDatabase(processedData, isFullScan = false)
+                
+                results.songsFound = modifiedSongs.size
+                results.songsAdded = processedData.newSongs.size
+                results.songsUpdated = processedData.updatedSongs.size
+                results.albumsAdded = processedData.newAlbums.size
+                results.artistsAdded = processedData.newArtists.size
+            }
+            
+            // Clean up deleted files
+            val cleanupResults = cleanupDeletedFiles()
+            results.songsRemoved = cleanupResults
+            
+        } catch (exception: Exception) {
+            Timber.e(exception, "$TAG - Error in incremental scan")
+            throw exception
+        }
+        
+        return results
     }
 
-    private fun createErrorData(error: String): Data {
-        return Data.Builder()
-            .putString("error", error)
-            .build()
+    /**
+     * Scan specific folders
+     */
+    private suspend fun scanSpecificFolders(folders: List<String>): ScanResults {
+        val results = ScanResults()
+        
+        try {
+            val allSongs = mutableListOf<Song>()
+            
+            folders.forEach { folderPath ->
+                Timber.d("$TAG - Scanning folder: $folderPath")
+                val folderSongs = mediaStoreScanner.getSongsInFolder(folderPath)
+                allSongs.addAll(folderSongs)
+            }
+            
+            Timber.d("$TAG - Found ${allSongs.size} songs in specified folders")
+            
+            if (allSongs.isNotEmpty()) {
+                val processedData = processScanData(allSongs)
+                updateDatabase(processedData, isFullScan = false)
+                
+                results.songsFound = allSongs.size
+                results.songsAdded = processedData.newSongs.size
+                results.albumsAdded = processedData.newAlbums.size
+                results.artistsAdded = processedData.newArtists.size
+            }
+            
+        } catch (exception: Exception) {
+            Timber.e(exception, "$TAG - Error scanning specific folders")
+            throw exception
+        }
+        
+        return results
     }
 
-    private data class AudioFileData(
-        val mediaStoreId: Long,
-        val path: String,
-        val title: String,
-        val artist: String,
-        val album: String,
-        val albumId: Long,
-        val duration: Long,
-        val size: Long,
-        val mimeType: String,
-        val dateAdded: Long,
-        val dateModified: Long,
-        val year: Int,
-        val trackNumber: Int,
-        val displayName: String
-    )
+    /**
+     * Process scan data and organize into songs, albums, artists
+     */
+    private suspend fun processScanData(songs: List<Song>): ProcessedScanData {
+        val data = ProcessedScanData()
+        
+        try {
+            val librarySettings = settingsRepository.getLibrarySettings()
+            
+            // Filter songs based on settings
+            val filteredSongs = songs.filter { song ->
+                // Check minimum duration
+                if (librarySettings.ignoreShortTracks && 
+                    song.duration < librarySettings.minTrackDuration * 1000) {
+                    return@filter false
+                }
+                
+                // Check if file exists and is valid
+                if (!MediaUtils.fileExists(song.path) || 
+                    !MediaUtils.validateAudioFile(song.path)) {
+                    return@filter false
+                }
+                
+                true
+            }
+            
+            Timber.d("$TAG - Filtered ${songs.size} to ${filteredSongs.size} valid songs")
+            
+            // Separate new and existing songs
+            for (song in filteredSongs) {
+                val existingSong = musicRepository.getSongByPath(song.path)
+                if (existingSong == null) {
+                    data.newSongs.add(song)
+                } else if (hasContentChanged(existingSong, song)) {
+                    data.updatedSongs.add(song)
+                }
+            }
+            
+            // Process albums and artists from all songs
+            processAlbumsAndArtists(filteredSongs, data)
+            
+        } catch (exception: Exception) {
+            Timber.e(exception, "$TAG - Error processing scan data")
+            throw exception
+        }
+        
+        return data
+    }
 
-    private data class ScanResult(
+    /**
+     * Process albums and artists from songs
+     */
+    private suspend fun processAlbumsAndArtists(songs: List<Song>,  ProcessedScanData) {
+        val albumMap = mutableMapOf<String, MutableList<Song>>()
+        val artistMap = mutableMapOf<String, MutableList<Song>>()
+        
+        // Group songs by album and artist
+        songs.forEach { song ->
+            val albumKey = "${song.album}_${song.artist}"
+            albumMap.getOrPut(albumKey) { mutableListOf() }.add(song)
+            
+            artistMap.getOrPut(song.artist) { mutableListOf() }.add(song)
+        }
+        
+        // Process albums
+        albumMap.forEach { (_, albumSongs) ->
+            val firstSong = albumSongs.first()
+            val existingAlbum = musicRepository.getAlbumByNameAndArtist(firstSong.album, firstSong.artist)
+            
+            if (existingAlbum == null) {
+                val newAlbum = Album(
+                    id = 0,
+                    mediaStoreId = firstSong.albumId,
+                    name = firstSong.album,
+                    artist = firstSong.artist,
+                    artistId = 0,
+                    year = firstSong.year,
+                    songCount = albumSongs.size,
+                    artworkPath = null
+                )
+                data.newAlbums.add(newAlbum)
+            }
+        }
+        
+        // Process artists
+        artistMap.forEach { (artistName, artistSongs) ->
+            val existingArtist = musicRepository.getArtistByName(artistName)
+            
+            if (existingArtist == null) {
+                val albums = artistSongs.map { it.album }.distinct()
+                val newArtist = Artist(
+                    id = 0,
+                    name = artistName,
+                    albumCount = albums.size,
+                    songCount = artistSongs.size,
+                    artworkPath = null
+                )
+                data.newArtists.add(newArtist)
+            }
+        }
+    }
+
+    /**
+     * Check if song content has changed
+     */
+    private fun hasContentChanged(existing: Song, new: Song): Boolean {
+        return existing.dateModified != new.dateModified ||
+               existing.title != new.title ||
+               existing.artist != new.artist ||
+               existing.album != new.album ||
+               existing.duration != new.duration
+    }
+
+    /**
+     * Update database with processed data
+     */
+    private suspend fun updateDatabase( ProcessedScanData, isFullScan: Boolean) {
+        try {
+            // Insert new artists first
+            data.newArtists.forEach { artist ->
+                musicRepository.insertArtist(artist)
+            }
+            
+            // Insert new albums
+            data.newAlbums.forEach { album ->
+                musicRepository.insertAlbum(album)
+            }
+            
+            // Insert new songs
+            data.newSongs.forEach { song ->
+                musicRepository.insertSong(song)
+            }
+            
+            // Update existing songs
+            data.updatedSongs.forEach { song ->
+                musicRepository.updateSong(song)
+            }
+            
+            // For full scan, remove songs that no longer exist
+            if (isFullScan) {
+                data.removedSongs.forEach { songPath ->
+                    musicRepository.deleteSongByPath(songPath)
+                }
+            }
+            
+            // Update last scan time
+            updateLastScanTime()
+            
+            Timber.d("$TAG - Database update completed")
+            
+        } catch (exception: Exception) {
+            Timber.e(exception, "$TAG - Error updating database")
+            throw exception
+        }
+    }
+
+    /**
+     * Clean up songs for files that no longer exist
+     */
+    private suspend fun cleanupDeletedFiles(): Int {
+        return try {
+            val allSongs = musicRepository.getAllSongs()
+            val deletedPaths = mutableListOf<String>()
+            
+            allSongs.forEach { song ->
+                if (!MediaUtils.fileExists(song.path)) {
+                    deletedPaths.add(song.path)
+                }
+            }
+            
+            deletedPaths.forEach { path ->
+                musicRepository.deleteSongByPath(path)
+            }
+            
+            Timber.d("$TAG - Cleaned up ${deletedPaths.size} deleted files")
+            deletedPaths.size
+            
+        } catch (exception: Exception) {
+            Timber.w(exception, "$TAG - Error cleaning up deleted files")
+            0
+        }
+    }
+
+    /**
+     * Update repository statistics after scan
+     */
+    private suspend fun updateRepositoryStatistics() {
+        try {
+            musicRepository.updateArtistStatistics()
+            musicRepository.updateAlbumStatistics()
+            musicRepository.updateGenreStatistics()
+            
+        } catch (exception: Exception) {
+            Timber.w(exception, "$TAG - Error updating repository statistics")
+        }
+    }
+
+    /**
+     * Get last scan time from settings
+     */
+    private suspend fun getLastScanTime(): Long {
+        return try {
+            val settings = settingsRepository.getLibrarySettings()
+            // This would be stored in settings - placeholder
+            0L
+        } catch (exception: Exception) {
+            0L
+        }
+    }
+
+    /**
+     * Update last scan time in settings
+     */
+    private suspend fun updateLastScanTime() {
+        try {
+            // This would update the last scan time in settings - placeholder
+            Timber.d("$TAG - Updated last scan time")
+        } catch (exception: Exception) {
+            Timber.w(exception, "$TAG - Error updating last scan time")
+        }
+    }
+
+    /**
+     * Log scan results
+     */
+    private fun logScanResults(results: ScanResults) {
+        val durationSec = results.scanDurationMs / 1000.0
+        Timber.i("$TAG - Library scan completed in ${durationSec}s:")
+        Timber.i("$TAG - Songs found: ${results.songsFound}")
+        Timber.i("$TAG - Songs added: ${results.songsAdded}")
+        Timber.i("$TAG - Songs updated: ${results.songsUpdated}")
+        Timber.i("$TAG - Songs removed: ${results.songsRemoved}")
+        Timber.i("$TAG - Albums added: ${results.albumsAdded}")
+        Timber.i("$TAG - Artists added: ${results.artistsAdded}")
+    }
+
+    /**
+     * Results of library scan operation
+     */
+    data class ScanResults(
+        var songsFound: Int = 0,
         var songsAdded: Int = 0,
         var songsUpdated: Int = 0,
         var songsRemoved: Int = 0,
         var albumsAdded: Int = 0,
-        var artistsAdded: Int = 0
+        var artistsAdded: Int = 0,
+        var scanDurationMs: Long = 0L
     ) {
-        override fun toString(): String {
-            return "ScanResult(added=$songsAdded, updated=$songsUpdated, removed=$songsRemoved, " +
-                   "albums=$albumsAdded, artists=$artistsAdded)"
+        fun merge(other: ScanResults) {
+            songsFound += other.songsFound
+            songsAdded += other.songsAdded
+            songsUpdated += other.songsUpdated
+            songsRemoved += other.songsRemoved
+            albumsAdded += other.albumsAdded
+            artistsAdded += other.artistsAdded
         }
     }
+
+    /**
+     * Processed scan data structure
+     */
+    data class ProcessedScanData(
+        val newSongs: MutableList<Song> = mutableListOf(),
+        val updatedSongs: MutableList<Song> = mutableListOf(),
+        val removedSongs: MutableList<String> = mutableListOf(),
+        val newAlbums: MutableList<Album> = mutableListOf(),
+        val newArtists: MutableList<Artist> = mutableListOf()
+    )
 }

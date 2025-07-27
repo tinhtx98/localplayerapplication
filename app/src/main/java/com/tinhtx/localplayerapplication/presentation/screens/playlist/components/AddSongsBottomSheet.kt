@@ -12,49 +12,30 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tinhtx.localplayerapplication.domain.model.Song
-import com.tinhtx.localplayerapplication.presentation.components.common.FullScreenLoadingIndicator
-import com.tinhtx.localplayerapplication.presentation.components.music.SongItem
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AddSongsBottomSheet(
-    currentPlaylistSongs: List<Song>,
-    onSongsSelected: (List<Song>) -> Unit,
-    onDismiss: () -> Unit,
-    modifier: Modifier = Modifier,
-    viewModel: AddSongsViewModel = hiltViewModel()
+    availableSongs: List<Song>,
+    selectedSongs: Set<Long>,
+    searchQuery: String,
+    isLoading: Boolean,
+    isAdding: Boolean,
+    onSearchQueryChanged: (String) -> Unit,
+    onToggleSongSelection: (Long) -> Unit,
+    onAddSelectedSongs: () -> Unit,
+    onDismiss: () -> Unit
 ) {
-    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val listState = rememberLazyListState()
-    var selectedSongs by remember { mutableStateOf<Set<Song>>(emptySet()) }
-    
-    val availableSongs = uiState.allSongs.filter { song ->
-        currentPlaylistSongs.none { it.id == song.id }
-    }
-
-    LaunchedEffect(Unit) {
-        viewModel.loadAllSongs()
-    }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        modifier = modifier,
-        dragHandle = {
-            Surface(
-                modifier = Modifier.padding(vertical = 8.dp),
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
-                shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp)
-            ) {
-                Box(modifier = Modifier.size(width = 32.dp, height = 4.dp))
-            }
-        }
+        modifier = Modifier.fillMaxHeight(0.9f)
     ) {
         Column(
             modifier = Modifier
-                .fillMaxWidth()
+                .fillMaxSize()
                 .padding(16.dp)
         ) {
             // Header
@@ -63,89 +44,117 @@ fun AddSongsBottomSheet(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
+                Text(
+                    text = "Add Songs",
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold
+                )
+
+                IconButton(onClick = onDismiss) {
                     Icon(
-                        imageVector = Icons.Default.LibraryAdd,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary
+                        imageVector = Icons.Default.Close,
+                        contentDescription = "Close"
                     )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = "Add Songs",
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                }
-                
-                if (selectedSongs.isNotEmpty()) {
-                    Badge(
-                        containerColor = MaterialTheme.colorScheme.primary
-                    ) {
-                        Text(
-                            text = selectedSongs.size.toString(),
-                            color = MaterialTheme.colorScheme.onPrimary
-                        )
-                    }
                 }
             }
-            
+
             Spacer(modifier = Modifier.height(16.dp))
-            
+
             // Search bar
-            var searchQuery by remember { mutableStateOf("") }
             OutlinedTextField(
                 value = searchQuery,
-                onValueChange = { searchQuery = it },
-                placeholder = { Text("Search songs...") },
+                onValueChange = onSearchQueryChanged,
+                label = { Text("Search songs") },
                 leadingIcon = {
                     Icon(
                         imageVector = Icons.Default.Search,
-                        contentDescription = null
+                        contentDescription = "Search"
                     )
                 },
                 trailingIcon = {
                     if (searchQuery.isNotEmpty()) {
-                        IconButton(onClick = { searchQuery = "" }) {
+                        IconButton(
+                            onClick = { onSearchQueryChanged("") }
+                        ) {
                             Icon(
                                 imageVector = Icons.Default.Clear,
-                                contentDescription = "Clear search"
+                                contentDescription = "Clear"
                             )
                         }
                     }
                 },
-                singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = MaterialTheme.colorScheme.primary
-                )
+                singleLine = true
             )
-            
+
             Spacer(modifier = Modifier.height(16.dp))
-            
-            // Content
-            when {
-                uiState.isLoading -> {
-                    Box(
+
+            // Selected count and action button
+            if (selectedSongs.isNotEmpty()) {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.primaryContainer
+                    )
+                ) {
+                    Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(300.dp),
-                        contentAlignment = Alignment.Center
+                            .padding(12.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        FullScreenLoadingIndicator(
-                            message = "Loading songs...",
-                            showBackground = false
+                        Text(
+                            text = "${selectedSongs.size} songs selected",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer
                         )
+
+                        Button(
+                            onClick = onAddSelectedSongs,
+                            enabled = !isAdding
+                        ) {
+                            if (isAdding) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(16.dp),
+                                    strokeWidth = 2.dp,
+                                    color = MaterialTheme.colorScheme.onPrimary
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                            }
+                            Text("Add")
+                        }
                     }
                 }
-                
+
+                Spacer(modifier = Modifier.height(12.dp))
+            }
+
+            // Songs list
+            when {
+                isLoading -> {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .weight(1f),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            CircularProgressIndicator()
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text("Loading songs...")
+                        }
+                    }
+                }
+
                 availableSongs.isEmpty() -> {
                     Box(
                         modifier = Modifier
-                            .fillMaxWidth()
-                            .height(200.dp),
+                            .fillMaxSize()
+                            .weight(1f),
                         contentAlignment = Alignment.Center
                     ) {
                         Column(
@@ -155,90 +164,41 @@ fun AddSongsBottomSheet(
                                 imageVector = Icons.Default.MusicOff,
                                 contentDescription = null,
                                 modifier = Modifier.size(48.dp),
-                                tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                             Spacer(modifier = Modifier.height(8.dp))
                             Text(
-                                text = "All songs are already in this playlist",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                                text = if (searchQuery.isNotEmpty()) {
+                                    "No songs found"
+                                } else {
+                                    "All songs are already in this playlist"
+                                },
+                                style = MaterialTheme.typography.titleMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     }
                 }
-                
+
                 else -> {
-                    val filteredSongs = if (searchQuery.isBlank()) {
-                        availableSongs
-                    } else {
-                        availableSongs.filter { song ->
-                            song.title.contains(searchQuery, ignoreCase = true) ||
-                            song.displayArtist.contains(searchQuery, ignoreCase = true) ||
-                            song.displayAlbum.contains(searchQuery, ignoreCase = true)
-                        }
-                    }
-                    
-                    // Songs count
-                    Text(
-                        text = "${filteredSongs.size} available songs",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
-                    )
-                    
-                    Spacer(modifier = Modifier.height(8.dp))
-                    
-                    // Songs list
                     LazyColumn(
                         state = listState,
                         modifier = Modifier
-                            .fillMaxWidth()
+                            .fillMaxSize()
                             .weight(1f),
                         verticalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
                         items(
-                            items = filteredSongs,
-                            key = { it.id }
+                            items = availableSongs,
+                            key = { song -> song.id }
                         ) { song ->
                             AddSongItem(
                                 song = song,
-                                isSelected = selectedSongs.contains(song),
-                                onSelectionChange = { isSelected ->
-                                    selectedSongs = if (isSelected) {
-                                        selectedSongs + song
-                                    } else {
-                                        selectedSongs - song
-                                    }
-                                },
-                                modifier = Modifier.animateItemPlacement()
+                                isSelected = selectedSongs.contains(song.id),
+                                onToggleSelection = { onToggleSongSelection(song.id) },
+                                modifier = Modifier.fillMaxWidth()
                             )
                         }
-                    }
-                }
-            }
-            
-            // Action buttons
-            if (availableSongs.isNotEmpty()) {
-                Spacer(modifier = Modifier.height(16.dp))
-                
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    OutlinedButton(
-                        onClick = onDismiss,
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Text("Cancel")
-                    }
-                    
-                    Button(
-                        onClick = {
-                            onSongsSelected(selectedSongs.toList())
-                        },
-                        enabled = selectedSongs.isNotEmpty(),
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Text("Add ${selectedSongs.size} songs")
                     }
                 }
             }
@@ -246,29 +206,27 @@ fun AddSongsBottomSheet(
     }
 }
 
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 private fun AddSongItem(
     song: Song,
     isSelected: Boolean,
-    onSelectionChange: (Boolean) -> Unit,
+    onToggleSelection: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Card(
-        onClick = { onSelectionChange(!isSelected) },
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier
+            .clickable { onToggleSelection() },
         colors = CardDefaults.cardColors(
             containerColor = if (isSelected) {
-                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
+                MaterialTheme.colorScheme.primaryContainer
             } else {
                 MaterialTheme.colorScheme.surface
             }
         ),
-        border = if (isSelected) {
-            androidx.compose.foundation.BorderStroke(
-                2.dp,
-                MaterialTheme.colorScheme.primary
-            )
-        } else null
+        elevation = CardDefaults.cardElevation(
+            defaultElevation = if (isSelected) 4.dp else 1.dp
+        )
     ) {
         Row(
             modifier = Modifier
@@ -276,24 +234,51 @@ private fun AddSongItem(
                 .padding(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            // Checkbox
             Checkbox(
                 checked = isSelected,
-                onCheckedChange = onSelectionChange,
-                colors = CheckboxDefaults.colors(
-                    checkedColor = MaterialTheme.colorScheme.primary
-                )
+                onCheckedChange = { onToggleSelection() }
             )
-            
-            Spacer(modifier = Modifier.width(8.dp))
-            
-            SongItem(
-                song = song,
-                onClick = { onSelectionChange(!isSelected) },
-                onFavoriteClick = { /* Handle favorite in parent */ },
-                onMoreClick = { /* Handle more options */ },
-                modifier = Modifier.weight(1f),
-                showMoreButton = false
+
+            Spacer(modifier = Modifier.width(12.dp))
+
+            // Song info
+            Column(
+                modifier = Modifier.weight(1f)
+            ) {
+                Text(
+                    text = song.title,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 1,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+
+                Spacer(modifier = Modifier.height(2.dp))
+
+                Text(
+                    text = "${song.artist} • ${song.album}",
+                    style = MaterialTheme.typography.bodySmall,
+                    maxLines = 1,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            // Duration
+            Text(
+                text = formatDuration(song.duration),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
     }
+}
+
+private fun formatDuration(durationMs: Long): String {
+    val totalSeconds = durationMs / 1000
+    val minutes = totalSeconds / 60
+    val seconds = totalSeconds % 60
+    return String.format("%d:%02d", minutes, seconds)
 }

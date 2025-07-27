@@ -1,35 +1,25 @@
 package com.tinhtx.localplayerapplication.domain.model
 
-enum class RepeatMode(val value: Int) {
-    OFF(0),
-    ONE(1),
-    ALL(2);
+/**
+ * Enum representing repeat modes
+ */
+enum class RepeatMode {
+    OFF,    // No repeat
+    ONE,    // Repeat current song
+    ALL;    // Repeat all songs in queue
+    
+    val displayName: String
+        get() = when (this) {
+            OFF -> "Off"
+            ONE -> "Repeat One"
+            ALL -> "Repeat All"
+        }
     
     fun next(): RepeatMode {
         return when (this) {
             OFF -> ONE
             ONE -> ALL
             ALL -> OFF
-        }
-    }
-    
-    val displayName: String
-        get() = when (this) {
-            OFF -> "Repeat Off"
-            ONE -> "Repeat One"
-            ALL -> "Repeat All"
-        }
-    
-    val iconResource: String
-        get() = when (this) {
-            OFF -> "repeat"
-            ONE -> "repeat_one"
-            ALL -> "repeat"
-        }
-    
-    companion object {
-        fun fromValue(value: Int): RepeatMode {
-            return values().find { it.value == value } ?: OFF
         }
     }
 }

@@ -1,80 +1,42 @@
 package com.tinhtx.localplayerapplication.domain.model
 
-import android.os.Parcelable
-import kotlinx.parcelize.Parcelize
-
-@Parcelize
-data class PlaybackState(
-    val currentSong: Song? = null,
-    val isPlaying: Boolean = false,
-    val isPrepared: Boolean = false,
-    val position: Long = 0L,
-    val duration: Long = 0L,
-    val bufferedPercentage: Int = 0,
-    val playbackSpeed: Float = 1.0f,
-    val repeatMode: RepeatMode = RepeatMode.OFF,
-    val shuffleMode: ShuffleMode = ShuffleMode.OFF,
-    val queue: List<Song> = emptyList(),
-    val queueIndex: Int = -1,
-    val error: String? = null
-) : Parcelable {
+/**
+ * Enum representing playback states
+ */
+enum class PlaybackState {
+    IDLE,       // Player is idle
+    LOADING,    // Loading media
+    READY,      // Ready to play
+    PLAYING,    // Currently playing
+    PAUSED,     // Paused
+    STOPPED,    // Stopped
+    BUFFERING,  // Buffering
+    ERROR;      // Error state
     
-    val progress: Float
-        get() = if (duration > 0) position.toFloat() / duration.toFloat() else 0f
-    
-    val hasQueue: Boolean
-        get() = queue.isNotEmpty()
-    
-    val hasNext: Boolean
-        get() = when {
-            !hasQueue -> false
-            repeatMode == RepeatMode.ONE -> true
-            shuffleMode == ShuffleMode.ON -> queue.size > 1
-            else -> queueIndex < queue.size - 1
+    val displayName: String
+        get() = when (this) {
+            IDLE -> "Idle"
+            LOADING -> "Loading"
+            READY -> "Ready"
+            PLAYING -> "Playing"
+            PAUSED -> "Paused"
+            STOPPED -> "Stopped"
+            BUFFERING -> "Buffering"
+            ERROR -> "Error"
         }
     
-    val hasPrevious: Boolean
-        get() = when {
-            !hasQueue -> false
-            repeatMode == RepeatMode.ONE -> true
-            shuffleMode == ShuffleMode.ON -> queue.size > 1
-            else -> queueIndex > 0
-        }
+    val isPlaying: Boolean
+        get() = this == PLAYING
     
-    val canSeek: Boolean
-        get() = isPrepared && duration > 0
+    val isPaused: Boolean
+        get() = this == PAUSED
     
-    val isBuffering: Boolean
-        get() = isPrepared && !isPlaying && position < duration && error == null
+    val canPlay: Boolean
+        get() = this == READY || this == PAUSED || this == STOPPED
     
-    val remainingTime: Long
-        get() = (duration - position).coerceAtLeast(0L)
+    val canPause: Boolean
+        get() = this == PLAYING || this == BUFFERING
     
-    val formattedPosition: String
-        get() = formatDuration(position)
-    
-    val formattedDuration: String
-        get() = formatDuration(duration)
-    
-    val formattedRemaining: String
-        get() = "-${formatDuration(remainingTime)}"
-    
-    private fun formatDuration(durationMs: Long): String {
-        val minutes = (durationMs / 1000) / 60
-        val seconds = (durationMs / 1000) % 60
-        return String.format("%02d:%02d", minutes, seconds)
-    }
-    
-    companion object {
-        fun empty() = PlaybackState()
-        
-        fun idle() = PlaybackState(
-            isPlaying = false,
-            isPrepared = false
-        )
-        
-        fun error(message: String) = PlaybackState(
-            error = message
-        )
-    }
+    val isActive: Boolean
+        get() = this == PLAYING || this == PAUSED || this == BUFFERING
 }

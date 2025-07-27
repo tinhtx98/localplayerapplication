@@ -1,9 +1,25 @@
 package com.tinhtx.localplayerapplication.data.local.database.entities
 
 import androidx.room.Entity
+import androidx.room.ForeignKey
+import androidx.room.Index
 import androidx.room.PrimaryKey
 
-@Entity(tableName = "history")
+/**
+ * Room entity representing playback history
+ */
+@Entity(
+    tableName = "history",
+    foreignKeys = [
+        ForeignKey(
+            entity = SongEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["songId"],
+            onDelete = ForeignKey.CASCADE
+        )
+    ],
+    indices = [Index(value = ["songId"]), Index(value = ["playedAt"])]
+)
 data class HistoryEntity(
     @PrimaryKey(autoGenerate = true)
     val id: Long = 0,
@@ -15,26 +31,6 @@ data class HistoryEntity(
     val sessionId: String = "",
     val skipped: Boolean = false
 ) {
-    // Computed properties for analytics
     val wasCompleted: Boolean get() = completionPercentage >= 0.8f
     val wasSkipped: Boolean get() = completionPercentage < 0.1f || skipped
-    val playSource: PlaySource get() = when (source?.lowercase()) {
-        "playlist" -> PlaySource.PLAYLIST
-        "album" -> PlaySource.ALBUM
-        "artist" -> PlaySource.ARTIST
-        "search" -> PlaySource.SEARCH
-        "queue" -> PlaySource.QUEUE
-        "shuffle" -> PlaySource.SHUFFLE
-        else -> PlaySource.UNKNOWN
-    }
-}
-
-enum class PlaySource {
-    PLAYLIST,
-    ALBUM,
-    ARTIST,
-    SEARCH,
-    QUEUE,
-    SHUFFLE,
-    UNKNOWN
 }

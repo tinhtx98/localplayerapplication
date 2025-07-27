@@ -1,199 +1,283 @@
 package com.tinhtx.localplayerapplication.core.utils
 
 import android.content.Context
-import android.content.res.Configuration
 import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
 import android.net.Uri
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.ime
-import androidx.compose.foundation.layout.systemBars
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.State
-import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.toArgb
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.dp
-import androidx.core.graphics.ColorUtils
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.catch
-import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.onStart
+import android.provider.MediaStore
+import androidx.compose.runtime.*
+import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleOwner
+import androidx.lifecycle.flowWithLifecycle
+import kotlinx.coroutines.flow.*
 import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
-import java.util.concurrent.TimeUnit
+import java.util.*
+import kotlin.time.Duration.Companion.milliseconds
 
-// String Extensions
-fun String?.orEmpty(): String = this ?: ""
-
-fun String.toUri(): Uri = Uri.parse(this)
-
-fun String.capitalizeWords(): String = 
-    split(" ").joinToString(" ") { word -> 
-        word.lowercase().replaceFirstChar { 
-            if (it.isLowerCase()) it.titlecase() else it.toString() 
-        } 
-    }
-
-// Long Extensions (Duration)
-fun Long.formatDuration(): String {
-    val minutes = TimeUnit.MILLISECONDS.toMinutes(this)
-    val seconds = TimeUnit.MILLISECONDS.toSeconds(this) % 60
-    return String.format(Locale.getDefault(), "%02d:%02d", minutes, seconds)
-}
-
-fun Long.formatDurationWithHours(): String {
-    val hours = TimeUnit.MILLISECONDS.toHours(this)
-    val minutes = TimeUnit.MILLISECONDS.toMinutes(this) % 60
-    val seconds = TimeUnit.MILLISECONDS.toSeconds(this) % 60
+/**
+ * Resource wrapper for handling loading, success, and error states
+ */
+sealed class Resource<out T> {
+    object Loading : Resource<Nothing>()
+    data class Success<T>(val  T) : Resource<T>()
+    data class Error(val exception: Throwable, val message: String = exception.message ?: "Unknown error") : Resource<Nothing>()
     
-    return if (hours > 0) {
-        String.format(Locale.getDefault(), "%02d:%02d:%02d", hours, minutes, seconds)
-    } else {
-        String.format(Locale.getDefault(), "%02d:%02d", minutes, seconds)
-    }
-}
-
-fun Long.toDateString(): String {
-    val date = Date(this * 1000) // Convert to milliseconds
-    val formatter = SimpleDateFormat("MMM dd, yyyy", Locale.getDefault())
-    return formatter.format(date)
-}
-
-// Int Extensions
-fun Int.toDp(): Dp = this.dp
-
-fun Int.px(): Dp {
-    return (this / android.content.res.Resources.getSystem().displayMetrics.density).dp
-}
-
-// Color Extensions
-fun Color.isDark(): Boolean {
-    return ColorUtils.calculateLuminance(this.toArgb()) < 0.5
-}
-
-fun Color.withAlpha(alpha: Float): Color {
-    return this.copy(alpha = alpha)
-}
-
-fun Color.darken(factor: Float = 0.1f): Color {
-    return Color(
-        red = (red * (1 - factor)).coerceIn(0f, 1f),
-        green = (green * (1 - factor)).coerceIn(0f, 1f),
-        blue = (blue * (1 - factor)).coerceIn(0f, 1f),
-        alpha = alpha
-    )
-}
-
-fun Color.lighten(factor: Float = 0.1f): Color {
-    return Color(
-        red = (red + (1 - red) * factor).coerceIn(0f, 1f),
-        green = (green + (1 - green) * factor).coerceIn(0f, 1f),
-        blue = (blue + (1 - blue) * factor).coerceIn(0f, 1f),
-        alpha = alpha
-    )
-}
-
-// Context Extensions
-fun Context.isLandscape(): Boolean {
-    return resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
-}
-
-fun Context.isTablet(): Boolean {
-    return (resources.configuration.screenLayout and Configuration.SCREENLAYOUT_SIZE_MASK) >= Configuration.SCREENLAYOUT_SIZE_LARGE
+    val isLoading: Boolean get() = this is Loading
+    val isSuccess: Boolean get() = this is Success
+    val isError: Boolean get() = this is Error
+    
+    fun getOrNull(): T? = if (this is Success) data else null
+    fun exceptionOrNull(): Throwable? = if (this is Error) exception else null
 }
 
 /**
- * Convert Flow to Result without initial loading state
+ * Flow Extensions
+ */
+
+/**
+ * Convert Flow to Resource with loading state
+ */
+fun <T> Flow<T>.asResource(): Flow<Resource<T>> {
+    return this
+        .map<T, Resource<T>> { Resource.Success(it) }
+        .onStart { emit(Resource.Loading) }
+        .catch { emit(Resource.Error(it)) }
+}
+
+/**
+ * Convert Flow to Result without initial state
  */
 fun <T> Flow<T>.asResult(): Flow<Result<T>> {
     return this
-        .map<T, Result<T>> { Result.success(it) }
+        .map { Result.success(it) }
         .catch { emit(Result.failure(it)) }
 }
 
-// Compose Extensions
+/**
+ * Collect flow with lifecycle awareness
+ */
 @Composable
-fun WindowInsets.Companion.statusBarHeight(): Dp {
-    return WindowInsets.systemBars.getTop(LocalDensity.current).toDp()
+fun <T> Flow<T>.collectAsStateWithLifecycle(
+    initialValue: T,
+    lifecycle: Lifecycle = LocalLifecycleOwner.current.lifecycle,
+    minActiveState: Lifecycle.State = Lifecycle.State.STARTED
+): State<T> = collectAsState(
+    initial = initialValue,
+    context = lifecycle.flowWithLifecycle(lifecycle, minActiveState).let { 
+        kotlinx.coroutines.Dispatchers.Main.immediate 
+    }
+)
+
+/**
+ * Debounce with custom duration
+ */
+fun <T> Flow<T>.debounceSearch(timeoutMillis: Long = 300L): Flow<T> {
+    return this.debounce(timeoutMillis)
 }
 
-@Composable
-fun WindowInsets.Companion.navigationBarHeight(): Dp {
-    return WindowInsets.systemBars.getBottom(LocalDensity.current).toDp()
-}
+/**
+ * Context Extensions
+ */
 
-@Composable
-fun WindowInsets.Companion.keyboardHeight(): Dp {
-    return WindowInsets.ime.getBottom(LocalDensity.current).toDp()
-}
-
-@Composable
-fun <T> T.rememberUpdated(): State<T> = rememberUpdatedState(this)
-
-// List Extensions
-fun <T> List<T>.shuffle(isShuffled: Boolean): List<T> {
-    return if (isShuffled) this.shuffled() else this
-}
-
-fun <T> List<T>.moveItem(fromIndex: Int, toIndex: Int): List<T> {
-    if (fromIndex == toIndex) return this
-    val mutableList = this.toMutableList()
-    val item = mutableList.removeAt(fromIndex)
-    mutableList.add(toIndex, item)
-    return mutableList
-}
-
-// Bitmap Extensions
-fun Bitmap.getDominantColor(): Int {
-    val width = width
-    val height = height
-    val pixelCount = width * height
-    val pixels = IntArray(pixelCount)
-    
-    getPixels(pixels, 0, width, 0, 0, width, height)
-    
-    val colorCounts = mutableMapOf<Int, Int>()
-    
-    for (pixel in pixels) {
-        val color = pixel and 0xFFFFFF // Remove alpha
-        colorCounts[color] = colorCounts.getOrDefault(color, 0) + 1
+/**
+ * Get drawable as bitmap
+ */
+fun Drawable.toBitmap(): Bitmap {
+    if (this is BitmapDrawable) {
+        return bitmap
     }
     
-    return colorCounts.maxByOrNull { it.value }?.key ?: android.graphics.Color.GRAY
-}
-
-// Drawable Extensions
-fun Drawable.toBitmap(width: Int = intrinsicWidth, height: Int = intrinsicHeight): Bitmap {
-    val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
-    val canvas = android.graphics.Canvas(bitmap)
+    val bitmap = Bitmap.createBitmap(
+        intrinsicWidth.takeIf { it > 0 } ?: 1,
+        intrinsicHeight.takeIf { it > 0 } ?: 1,
+        Bitmap.Config.ARGB_8888
+    )
+    
+    val canvas = Canvas(bitmap)
     setBounds(0, 0, canvas.width, canvas.height)
     draw(canvas)
     return bitmap
 }
 
-// Collection Extensions
-fun <T> Collection<T>.isNotEmpty(): Boolean = !isEmpty()
-
-inline fun <T> Iterable<T>.sumByLong(selector: (T) -> Long): Long {
-    var sum = 0L
-    for (element in this) {
-        sum += selector(element)
+/**
+ * Get album art from MediaStore
+ */
+fun Context.getAlbumArt(albumId: Long): Bitmap? {
+    return try {
+        val uri = Uri.parse("content://media/external/audio/albumart/$albumId")
+        MediaStore.Images.Media.getBitmap(contentResolver, uri)
+    } catch (exception: Exception) {
+        null
     }
-    return sum
 }
 
-// Safe Cast Extensions
-inline fun <reified T> Any?.safeCast(): T? = this as? T
+/**
+ * Time and Duration Extensions
+ */
 
-// Validation Extensions
-fun String?.isValidEmail(): Boolean {
-    return this?.let { 
-        android.util.Patterns.EMAIL_ADDRESS.matcher(it).matches() 
-    } ?: false
+/**
+ * Format milliseconds to MM:SS or HH:MM:SS
+ */
+fun Long.formatDuration(): String {
+    val duration = this.milliseconds
+    val hours = duration.inWholeHours
+    val minutes = (duration.inWholeMinutes % 60)
+    val seconds = (duration.inWholeSeconds % 60)
+    
+    return if (hours > 0) {
+        String.format("%02d:%02d:%02d", hours, minutes, seconds)
+    } else {
+        String.format("%02d:%02d", minutes, seconds)
+    }
 }
 
-fun String?.isNotNullOrBlank(): Boolean = !isNullOrBlank()
+/**
+ * Format date
+ */
+fun Long.formatDate(pattern: String = "MMM dd, yyyy"): String {
+    val formatter = SimpleDateFormat(pattern, Locale.getDefault())
+    return formatter.format(Date(this))
+}
+
+/**
+ * String Extensions
+ */
+
+/**
+ * Capitalize first letter of each word
+ */
+fun String.toTitleCase(): String {
+    return this.split(" ").joinToString(" ") { word ->
+        word.replaceFirstChar { 
+            if (it.isLowerCase()) it.titlecase(Locale.getDefault()) else it.toString() 
+        }
+    }
+}
+
+/**
+ * Safe substring
+ */
+fun String.safeSubstring(startIndex: Int, endIndex: Int = length): String {
+    val safeStart = startIndex.coerceAtLeast(0)
+    val safeEnd = endIndex.coerceAtMost(length)
+    return if (safeStart < safeEnd) substring(safeStart, safeEnd) else ""
+}
+
+/**
+ * Check if string contains query ignoring case
+ */
+fun String.containsIgnoreCase(query: String): Boolean {
+    return this.lowercase().contains(query.lowercase())
+}
+
+/**
+ * Collection Extensions
+ */
+
+/**
+ * Safe get item from list
+ */
+fun <T> List<T>.safeGet(index: Int): T? {
+    return if (index in indices) get(index) else null
+}
+
+/**
+ * Toggle item in list
+ */
+fun <T> List<T>.toggle(item: T): List<T> {
+    return if (contains(item)) {
+        this - item
+    } else {
+        this + item
+    }
+}
+
+/**
+ * Move item in list
+ */
+fun <T> MutableList<T>.move(fromIndex: Int, toIndex: Int) {
+    if (fromIndex in indices && toIndex in indices) {
+        val item = removeAt(fromIndex)
+        add(toIndex, item)
+    }
+}
+
+/**
+ * Nullable Extensions
+ */
+
+/**
+ * Execute block if not null
+ */
+inline fun <T> T?.ifNotNull(block: (T) -> Unit) {
+    if (this != null) block(this)
+}
+
+/**
+ * Return default value if null
+ */
+fun <T> T?.orDefault(default: T): T = this ?: default
+
+/**
+ * Boolean Extensions
+ */
+
+/**
+ * Convert boolean to int (0 or 1)
+ */
+fun Boolean.toInt(): Int = if (this) 1 else 0
+
+/**
+ * Convert int to boolean
+ */
+fun Int.toBoolean(): Boolean = this != 0
+
+/**
+ * Number Extensions
+ */
+
+/**
+ * Clamp number between min and max
+ */
+fun Int.clamp(min: Int, max: Int): Int = coerceIn(min, max)
+fun Float.clamp(min: Float, max: Float): Float = coerceIn(min, max)
+fun Double.clamp(min: Double, max: Double): Double = coerceIn(min, max)
+
+/**
+ * Convert bytes to human readable format
+ */
+fun Long.formatBytes(): String {
+    val units = arrayOf("B", "KB", "MB", "GB", "TB")
+    var bytes = this.toDouble()
+    var unitIndex = 0
+    
+    while (bytes >= 1024 && unitIndex < units.size - 1) {
+        bytes /= 1024
+        unitIndex++
+    }
+    
+    return String.format("%.1f %s", bytes, units[unitIndex])
+}
+
+/**
+ * Uri Extensions
+ */
+
+/**
+ * Get file name from URI
+ */
+fun Uri.getFileName(context: Context): String? {
+    return try {
+        context.contentResolver.query(this, null, null, null, null)?.use { cursor ->
+            if (cursor.moveToFirst()) {
+                val nameIndex = cursor.getColumnIndex(MediaStore.Audio.Media.DISPLAY_NAME)
+                if (nameIndex != -1) cursor.getString(nameIndex) else null
+            } else null
+        }
+    } catch (exception: Exception) {
+        null
+    }
+}

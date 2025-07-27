@@ -1,6 +1,5 @@
 package com.tinhtx.localplayerapplication.presentation.screens.playlist.components
 
-import androidx.compose.animation.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
@@ -18,130 +17,262 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import coil.compose.AsyncImage
 import com.tinhtx.localplayerapplication.domain.model.Playlist
+import com.tinhtx.localplayerapplication.domain.model.Song
+import com.tinhtx.localplayerapplication.presentation.components.image.CoilAsyncImage
 
 @Composable
 fun PlaylistHeaderCard(
     playlist: Playlist,
-    onPlayClick: () -> Unit,
-    onShuffleClick: () -> Unit,
+    isPlaying: Boolean,
+    currentPlayingSong: Song?,
+    canEdit: Boolean,
+    canAddSongs: Boolean,
+    onPlayPlaylist: () -> Unit,
+    onShufflePlay: () -> Unit,
+    onEditPlaylist: () -> Unit,
+    onAddSongs: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Card(
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier,
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface
         ),
         elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
     ) {
-        Box {
-            // Background gradient
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(4.dp)
-                    .background(
-                        brush = Brush.horizontalGradient(
-                            colors = listOf(
-                                MaterialTheme.colorScheme.primary.copy(alpha = 0.8f),
-                                MaterialTheme.colorScheme.secondary.copy(alpha = 0.6f),
-                                MaterialTheme.colorScheme.tertiary.copy(alpha = 0.4f)
-                            )
-                        )
-                    )
-            )
-            
-            Column(
-                modifier = Modifier.padding(20.dp)
+        Column(
+            modifier = Modifier.padding(16.dp)
+        ) {
+            // Playlist image and basic info
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically
+                // Playlist image
+                Box(
+                    modifier = Modifier.size(120.dp)
                 ) {
-                    // Playlist cover art
-                    PlaylistCoverArt(
-                        coverArtPath = playlist.coverArtPath,
-                        playlistName = playlist.name,
-                        modifier = Modifier.size(80.dp)
+                    if (playlist.imagePath != null) {
+                        CoilAsyncImage(
+                            imageUrl = playlist.imagePath,
+                            contentDescription = "Playlist image for ${playlist.name}",
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .clip(RoundedCornerShape(12.dp)),
+                            contentScale = ContentScale.Crop
+                        )
+                    } else {
+                        // Default playlist image
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(
+                                    Brush.linearGradient(
+                                        colors = listOf(
+                                            MaterialTheme.colorScheme.primary,
+                                            MaterialTheme.colorScheme.secondary
+                                        )
+                                    )
+                                ),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.PlaylistPlay,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onPrimary,
+                                modifier = Modifier.size(48.dp)
+                            )
+                        }
+                    }
+
+                    // Playing indicator
+                    if (isPlaying && currentPlayingSong != null) {
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.BottomEnd)
+                                .padding(8.dp)
+                                .size(24.dp)
+                                .background(
+                                    MaterialTheme.colorScheme.primary.copy(alpha = 0.9f),
+                                    CircleShape
+                                ),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Equalizer,
+                                contentDescription = "Playing",
+                                tint = MaterialTheme.colorScheme.onPrimary,
+                                modifier = Modifier.size(12.dp)
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.width(16.dp))
+
+                // Playlist info
+                Column(
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text(
+                        text = playlist.name,
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
                     )
-                    
-                    Spacer(modifier = Modifier.width(16.dp))
-                    
-                    // Playlist info
-                    Column(
-                        modifier = Modifier.weight(1f)
-                    ) {
+
+                    Spacer(modifier = Modifier.height(4.dp))
+
+                    if (playlist.description.isNotBlank()) {
                         Text(
-                            text = playlist.name,
-                            style = MaterialTheme.typography.headlineSmall,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface,
+                            text = playlist.description,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                             maxLines = 2,
                             overflow = TextOverflow.Ellipsis
                         )
-                        
-                        Spacer(modifier = Modifier.height(4.dp))
-                        
-                        Text(
-                            text = playlist.songCountText,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
-                        )
-                        
-                        if (playlist.description?.isNotBlank() == true) {
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                text = playlist.description,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-                                maxLines = 2,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
-                        
+
                         Spacer(modifier = Modifier.height(8.dp))
-                        
-                        // Created date
-                        Text(
-                            text = "Created ${formatDate(playlist.dateCreated)}",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-                        )
                     }
-                }
-                
-                Spacer(modifier = Modifier.height(20.dp))
-                
-                // Action buttons
-                if (playlist.songCount > 0) {
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+
+                    // Playlist stats
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
-                        Button(
-                            onClick = onPlayClick,
-                            modifier = Modifier.weight(1f)
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
                             Icon(
-                                imageVector = Icons.Default.PlayArrow,
+                                imageVector = Icons.Default.MusicNote,
                                 contentDescription = null,
-                                modifier = Modifier.size(18.dp)
+                                modifier = Modifier.size(16.dp),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
                             )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("Play")
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "${playlist.songCount} songs",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                         }
-                        
-                        OutlinedButton(
-                            onClick = onShuffleClick,
-                            modifier = Modifier.weight(1f)
+
+                        if (playlist.totalDuration > 0) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Schedule,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp),
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = formatDuration(playlist.totalDuration),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
                             Icon(
-                                imageVector = Icons.Default.Shuffle,
+                                imageVector = Icons.Default.CalendarToday,
                                 contentDescription = null,
-                                modifier = Modifier.size(18.dp)
+                                modifier = Modifier.size(16.dp),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
                             )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("Shuffle")
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = formatDate(playlist.createdAt),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                         }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Action buttons
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                // Play button
+                Button(
+                    onClick = onPlayPlaylist,
+                    modifier = Modifier.weight(1f),
+                    enabled = playlist.songCount > 0
+                ) {
+                    Icon(
+                        imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(if (isPlaying) "Pause" else "Play")
+                }
+
+                // Shuffle button
+                OutlinedButton(
+                    onClick = onShufflePlay,
+                    modifier = Modifier.weight(1f),
+                    enabled = playlist.songCount > 0
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Shuffle,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Shuffle")
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Secondary action buttons
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                // Edit button
+                if (canEdit) {
+                    OutlinedButton(
+                        onClick = onEditPlaylist,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Edit,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Edit")
+                    }
+                }
+
+                // Add songs button
+                if (canAddSongs) {
+                    OutlinedButton(
+                        onClick = onAddSongs,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Add,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Add Songs")
                     }
                 }
             }
@@ -149,88 +280,23 @@ fun PlaylistHeaderCard(
     }
 }
 
-@Composable
-private fun PlaylistCoverArt(
-    coverArtPath: String?,
-    playlistName: String,
-    modifier: Modifier = Modifier
-) {
-    Box(
-        modifier = modifier
-            .clip(RoundedCornerShape(12.dp))
-            .background(MaterialTheme.colorScheme.primaryContainer),
-        contentAlignment = Alignment.Center
-    ) {
-        if (coverArtPath != null) {
-            AsyncImage(
-                model = coverArtPath,
-                contentDescription = "Playlist cover for $playlistName",
-                modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Crop,
-                error = {
-                    DefaultPlaylistCover(playlistName = playlistName)
-                }
-            )
-        } else {
-            DefaultPlaylistCover(playlistName = playlistName)
-        }
-    }
-}
-
-@Composable
-private fun DefaultPlaylistCover(
-    playlistName: String,
-    modifier: Modifier = Modifier
-) {
-    Box(
-        modifier = modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center
-    ) {
-        // Background gradient
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(
-                    brush = Brush.radialGradient(
-                        colors = listOf(
-                            MaterialTheme.colorScheme.primary.copy(alpha = 0.8f),
-                            MaterialTheme.colorScheme.primary.copy(alpha = 0.4f)
-                        )
-                    )
-                )
-        )
-        
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Icon(
-                imageVector = Icons.Default.QueueMusic,
-                contentDescription = null,
-                modifier = Modifier.size(32.dp),
-                tint = Color.White
-            )
-            
-            if (playlistName.isNotBlank()) {
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = playlistName.take(2).uppercase(),
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White
-                )
-            }
-        }
+private fun formatDuration(durationMs: Long): String {
+    val totalSeconds = durationMs / 1000
+    val hours = totalSeconds / 3600
+    val minutes = (totalSeconds % 3600) / 60
+    
+    return when {
+        hours > 0 -> "${hours}h ${minutes}m"
+        minutes > 0 -> "${minutes}m"
+        else -> "<1m"
     }
 }
 
 private fun formatDate(timestamp: Long): String {
-    val currentTime = System.currentTimeMillis()
-    val diff = currentTime - timestamp
-    
-    return when {
-        diff < 24 * 60 * 60 * 1000 -> "today"
-        diff < 7 * 24 * 60 * 60 * 1000 -> "${diff / (24 * 60 * 60 * 1000)} days ago"
-        diff < 30 * 24 * 60 * 60 * 1000 -> "${diff / (7 * 24 * 60 * 60 * 1000)} weeks ago"
-        else -> "a while ago"
+    return try {
+        java.text.SimpleDateFormat("MMM dd, yyyy", java.util.Locale.getDefault())
+            .format(java.util.Date(timestamp))
+    } catch (e: Exception) {
+        "Unknown"
     }
 }

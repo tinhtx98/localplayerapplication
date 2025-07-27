@@ -9,9 +9,8 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 
@@ -20,61 +19,56 @@ fun ErrorMessage(
     message: String,
     modifier: Modifier = Modifier,
     onRetry: (() -> Unit)? = null,
-    retryText: String = "Thử lại",
-    icon: ImageVector = Icons.Default.Error,
-    backgroundColor: Color = MaterialTheme.colorScheme.errorContainer,
-    contentColor: Color = MaterialTheme.colorScheme.onErrorContainer
+    onDismiss: (() -> Unit)? = null
 ) {
     Card(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(16.dp),
+        modifier = modifier,
         colors = CardDefaults.cardColors(
-            containerColor = backgroundColor,
-            contentColor = contentColor
+            containerColor = MaterialTheme.colorScheme.errorContainer
         ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        shape = RoundedCornerShape(12.dp)
     ) {
-        Column(
+        Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(20.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(
-                imageVector = icon,
+                imageVector = Icons.Default.Error,
                 contentDescription = null,
-                modifier = Modifier.size(48.dp),
-                tint = contentColor.copy(alpha = 0.8f)
+                tint = MaterialTheme.colorScheme.onErrorContainer,
+                modifier = Modifier.size(24.dp)
             )
             
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.width(12.dp))
             
             Text(
                 text = message,
                 style = MaterialTheme.typography.bodyMedium,
-                textAlign = TextAlign.Center,
-                color = contentColor
+                color = MaterialTheme.colorScheme.onErrorContainer,
+                modifier = Modifier.weight(1f)
             )
             
             if (onRetry != null) {
-                Spacer(modifier = Modifier.height(16.dp))
-                
-                Button(
+                TextButton(
                     onClick = onRetry,
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.error,
-                        contentColor = MaterialTheme.colorScheme.onError
+                    colors = ButtonDefaults.textButtonColors(
+                        contentColor = MaterialTheme.colorScheme.onErrorContainer
                     )
                 ) {
+                    Text("Retry")
+                }
+            }
+            
+            if (onDismiss != null) {
+                IconButton(onClick = onDismiss) {
                     Icon(
-                        imageVector = Icons.Default.Refresh,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp)
+                        imageVector = Icons.Default.Close,
+                        contentDescription = "Dismiss",
+                        tint = MaterialTheme.colorScheme.onErrorContainer,
+                        modifier = Modifier.size(20.dp)
                     )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(text = retryText)
                 }
             }
         }
@@ -82,159 +76,74 @@ fun ErrorMessage(
 }
 
 @Composable
-fun MusicErrorMessage(
-    title: String = "Có lỗi xảy ra",
+fun ErrorScreen(
+    title: String = "Something went wrong",
     message: String,
-    modifier: Modifier = Modifier,
     onRetry: (() -> Unit)? = null,
-    errorType: MusicErrorType = MusicErrorType.GENERAL
+    onNavigateBack: (() -> Unit)? = null,
+    modifier: Modifier = Modifier
 ) {
-    val (icon, backgroundColor, contentColor) = when (errorType) {
-        MusicErrorType.NO_PERMISSION -> Triple(
-            Icons.Default.Block,
-            MaterialTheme.colorScheme.warningContainer,
-            MaterialTheme.colorScheme.onWarningContainer
-        )
-        MusicErrorType.NO_MUSIC_FOUND -> Triple(
-            Icons.Default.MusicOff,
-            MaterialTheme.colorScheme.surfaceVariant,
-            MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        MusicErrorType.PLAYBACK_ERROR -> Triple(
-            Icons.Default.PlayArrow,
-            MaterialTheme.colorScheme.errorContainer,
-            MaterialTheme.colorScheme.onErrorContainer
-        )
-        MusicErrorType.NETWORK_ERROR -> Triple(
-            Icons.Default.WifiOff,
-            MaterialTheme.colorScheme.errorContainer,
-            MaterialTheme.colorScheme.onErrorContainer
-        )
-        MusicErrorType.GENERAL -> Triple(
-            Icons.Default.Error,
-            MaterialTheme.colorScheme.errorContainer,
-            MaterialTheme.colorScheme.onErrorContainer
-        )
-    }
-
-    Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
+    Box(
+        modifier = modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center
     ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            modifier = Modifier.size(64.dp),
-            tint = contentColor.copy(alpha = 0.6f)
-        )
-        
-        Spacer(modifier = Modifier.height(16.dp))
-        
-        Text(
-            text = title,
-            style = MaterialTheme.typography.headlineSmall,
-            color = contentColor,
-            textAlign = TextAlign.Center
-        )
-        
-        Spacer(modifier = Modifier.height(8.dp))
-        
-        Text(
-            text = message,
-            style = MaterialTheme.typography.bodyMedium,
-            color = contentColor.copy(alpha = 0.8f),
-            textAlign = TextAlign.Center
-        )
-        
-        if (onRetry != null) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.padding(32.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Default.ErrorOutline,
+                contentDescription = null,
+                modifier = Modifier.size(80.dp),
+                tint = MaterialTheme.colorScheme.error
+            )
+            
             Spacer(modifier = Modifier.height(24.dp))
             
-            OutlinedButton(
-                onClick = onRetry,
-                colors = ButtonDefaults.outlinedButtonColors(
-                    contentColor = contentColor
-                ),
-                border = ButtonDefaults.outlinedButtonBorder.copy(
-                    brush = androidx.compose.foundation.BorderStroke(
-                        1.dp,
-                        contentColor.copy(alpha = 0.5f)
-                    ).brush
-                )
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Refresh,
-                    contentDescription = null,
-                    modifier = Modifier.size(18.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("Thử lại")
-            }
-        }
-    }
-}
-
-enum class MusicErrorType {
-    NO_PERMISSION,
-    NO_MUSIC_FOUND,
-    PLAYBACK_ERROR,
-    NETWORK_ERROR,
-    GENERAL
-}
-
-@Composable
-fun InlineErrorMessage(
-    message: String,
-    modifier: Modifier = Modifier,
-    onDismiss: (() -> Unit)? = null
-) {
-    AnimatedVisibility(
-        visible = true,
-        enter = slideInVertically() + fadeIn(),
-        exit = slideOutVertically() + fadeOut()
-    ) {
-        Card(
-            modifier = modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp),
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.9f),
-                contentColor = MaterialTheme.colorScheme.onErrorContainer
-            ),
-            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
-        ) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.headlineMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface,
+                textAlign = TextAlign.Center
+            )
+            
+            Spacer(modifier = Modifier.height(12.dp))
+            
+            Text(
+                text = message,
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+                lineHeight = MaterialTheme.typography.bodyLarge.lineHeight
+            )
+            
+            Spacer(modifier = Modifier.height(32.dp))
+            
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
-                verticalAlignment = Alignment.CenterVertically
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Icon(
-                    imageVector = Icons.Default.Warning,
-                    contentDescription = null,
-                    modifier = Modifier.size(20.dp),
-                    tint = MaterialTheme.colorScheme.onErrorContainer
-                )
-                
-                Spacer(modifier = Modifier.width(12.dp))
-                
-                Text(
-                    text = message,
-                    style = MaterialTheme.typography.bodySmall,
-                    modifier = Modifier.weight(1f)
-                )
-                
-                if (onDismiss != null) {
-                    IconButton(
-                        onClick = onDismiss,
-                        modifier = Modifier.size(24.dp)
-                    ) {
+                if (onNavigateBack != null) {
+                    OutlinedButton(onClick = onNavigateBack) {
                         Icon(
-                            imageVector = Icons.Default.Close,
-                            contentDescription = "Đóng",
-                            modifier = Modifier.size(16.dp)
+                            imageVector = Icons.Default.ArrowBack,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
                         )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Go Back")
+                    }
+                }
+                
+                if (onRetry != null) {
+                    Button(onClick = onRetry) {
+                        Icon(
+                            imageVector = Icons.Default.Refresh,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Try Again")
                     }
                 }
             }
@@ -242,17 +151,221 @@ fun InlineErrorMessage(
     }
 }
 
-// Color extensions for warning
-val ColorScheme.warningContainer: Color
-    @Composable get() = if (androidx.compose.foundation.isSystemInDarkTheme()) {
-        Color(0xFF4A4300)
-    } else {
-        Color(0xFFFFE08C)
+@Composable
+fun ErrorSnackbar(
+    message: String,
+    isVisible: Boolean,
+    onDismiss: () -> Unit,
+    onRetry: (() -> Unit)? = null,
+    modifier: Modifier = Modifier
+) {
+    AnimatedVisibility(
+        visible = isVisible,
+        enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
+        exit = slideOutVertically(targetOffsetY = { it }) + fadeOut(),
+        modifier = modifier
+    ) {
+        Card(
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.errorContainer
+            ),
+            shape = RoundedCornerShape(8.dp)
+        ) {
+            Row(
+                modifier = Modifier.padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Error,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onErrorContainer,
+                    modifier = Modifier.size(20.dp)
+                )
+                
+                Spacer(modifier = Modifier.width(12.dp))
+                
+                Text(
+                    text = message,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onErrorContainer,
+                    modifier = Modifier.weight(1f)
+                )
+                
+                if (onRetry != null) {
+                    TextButton(
+                        onClick = onRetry,
+                        colors = ButtonDefaults.textButtonColors(
+                            contentColor = MaterialTheme.colorScheme.onErrorContainer
+                        )
+                    ) {
+                        Text("Retry")
+                    }
+                }
+                
+                TextButton(
+                    onClick = onDismiss,
+                    colors = ButtonDefaults.textButtonColors(
+                        contentColor = MaterialTheme.colorScheme.onErrorContainer
+                    )
+                ) {
+                    Text("Dismiss")
+                }
+            }
+        }
     }
+}
 
-val ColorScheme.onWarningContainer: Color
-    @Composable get() = if (androidx.compose.foundation.isSystemInDarkTheme()) {
-        Color(0xFFFFE08C)
-    } else {
-        Color(0xFF4A4300)
+@Composable
+fun NetworkErrorMessage(
+    onRetry: () -> Unit,
+    onDismiss: (() -> Unit)? = null,
+    modifier: Modifier = Modifier
+) {
+    ErrorMessage(
+        message = "No internet connection. Please check your network and try again.",
+        onRetry = onRetry,
+        onDismiss = onDismiss,
+        modifier = modifier
+    )
+}
+
+@Composable
+fun ServerErrorMessage(
+    onRetry: () -> Unit,
+    onDismiss: (() -> Unit)? = null,
+    modifier: Modifier = Modifier
+) {
+    ErrorMessage(
+        message = "Server error occurred. Please try again later.",
+        onRetry = onRetry,
+        onDismiss = onDismiss,
+        modifier = modifier
+    )
+}
+
+@Composable
+fun FileNotFoundError(
+    fileName: String,
+    onDismiss: (() -> Unit)? = null,
+    modifier: Modifier = Modifier
+) {
+    ErrorMessage(
+        message = "File '$fileName' not found. It may have been moved or deleted.",
+        onDismiss = onDismiss,
+        modifier = modifier
+    )
+}
+
+@Composable
+fun PermissionErrorMessage(
+    permission: String,
+    onOpenSettings: () -> Unit,
+    onDismiss: (() -> Unit)? = null,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        modifier = modifier,
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.errorContainer
+        )
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp)
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Lock,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onErrorContainer,
+                    modifier = Modifier.size(24.dp)
+                )
+                
+                Spacer(modifier = Modifier.width(12.dp))
+                
+                Text(
+                    text = "Permission Required",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onErrorContainer
+                )
+            }
+            
+            Spacer(modifier = Modifier.height(8.dp))
+            
+            Text(
+                text = "This app needs $permission permission to function properly.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onErrorContainer
+            )
+            
+            Spacer(modifier = Modifier.height(16.dp))
+            
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                if (onDismiss != null) {
+                    OutlinedButton(
+                        onClick = onDismiss,
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            contentColor = MaterialTheme.colorScheme.onErrorContainer
+                        )
+                    ) {
+                        Text("Dismiss")
+                    }
+                }
+                
+                Button(
+                    onClick = onOpenSettings,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.error,
+                        contentColor = MaterialTheme.colorScheme.onError
+                    )
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Settings,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Open Settings")
+                }
+            }
+        }
     }
+}
+
+@Composable
+fun ErrorBoundary(
+    onRetry: () -> Unit,
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit
+) {
+    var hasError by remember { mutableStateOf(false) }
+    var errorMessage by remember { mutableStateOf("") }
+    
+    if (hasError) {
+        ErrorScreen(
+            title = "Unexpected Error",
+            message = errorMessage.ifEmpty { "An unexpected error occurred. Please try again." },
+            onRetry = {
+                hasError = false
+                errorMessage = ""
+                onRetry()
+            },
+            modifier = modifier
+        )
+    } else {
+        try {
+            content()
+        } catch (e: Exception) {
+            LaunchedEffect(e) {
+                hasError = true
+                errorMessage = e.message ?: "Unknown error"
+            }
+        }
+    }
+}

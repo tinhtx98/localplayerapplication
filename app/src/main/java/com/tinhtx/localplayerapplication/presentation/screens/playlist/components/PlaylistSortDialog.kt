@@ -1,85 +1,182 @@
 package com.tinhtx.localplayerapplication.presentation.screens.playlist.components
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
-import com.tinhtx.localplayerapplication.core.constants.AppConstants
+import com.tinhtx.localplayerapplication.domain.model.SortOrder
 
 @Composable
 fun PlaylistSortDialog(
-    currentSortOrder: AppConstants.SortOrder,
-    onSortOrderChange: (AppConstants.SortOrder) -> Unit,
-    onDismiss: () -> Unit
+    currentSortOrder: SortOrder,
+    currentAscending: Boolean,
+    canUseCustomOrder: Boolean,
+    onDismiss: () -> Unit,
+    onApply: (SortOrder, Boolean) -> Unit
 ) {
-    Dialog(onDismissRequest = onDismiss) {
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surface
+    var selectedSortOrder by remember { mutableStateOf(currentSortOrder) }
+    var selectedAscending by remember { mutableStateOf(currentAscending) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        icon = {
+            Icon(
+                imageVector = Icons.Default.Sort,
+                contentDescription = null
             )
-        ) {
+        },
+        title = {
+            Text(
+                text = "Sort songs",
+                fontWeight = FontWeight.Bold
+            )
+        },
+        text = {
             Column(
-                modifier = Modifier.padding(16.dp)
+                modifier = Modifier.selectableGroup()
             ) {
                 Text(
-                    text = "Sort playlist",
-                    style = MaterialTheme.typography.titleLarge,
-                    color = MaterialTheme.colorScheme.onSurface
+                    text = "Sort by",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                
-                Spacer(modifier = Modifier.height(16.dp))
-                
-                val sortOptions = listOf(
-                    AppConstants.SortOrder.CUSTOM to "Custom order",
-                    AppConstants.SortOrder.TITLE_ASC to "Song title (A-Z)",
-                    AppConstants.SortOrder.TITLE_DESC to "Song title (Z-A)",
-                    AppConstants.SortOrder.ARTIST_ASC to "Artist (A-Z)",
-                    AppConstants.SortOrder.ARTIST_DESC to "Artist (Z-A)",
-                    AppConstants.SortOrder.ALBUM_ASC to "Album (A-Z)",
-                    AppConstants.SortOrder.ALBUM_DESC to "Album (Z-A)",
-                    AppConstants.SortOrder.DATE_ADDED_DESC to "Recently added",
-                    AppConstants.SortOrder.DATE_ADDED_ASC to "Oldest first",
-                    AppConstants.SortOrder.DURATION_ASC to "Duration (shortest)",
-                    AppConstants.SortOrder.DURATION_DESC to "Duration (longest)"
-                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // Sort options
+                val sortOptions = buildList {
+                    if (canUseCustomOrder) {
+                        add(SortOrder.CUSTOM to "Custom order")
+                    }
+                    add(SortOrder.TITLE to "Title")
+                    add(SortOrder.ARTIST to "Artist")
+                    add(SortOrder.ALBUM to "Album")
+                    add(SortOrder.DURATION to "Duration")
+                    add(SortOrder.DATE_ADDED to "Date added")
+                    add(SortOrder.PLAY_COUNT to "Play count")
+                }
 
                 sortOptions.forEach { (sortOrder, label) ->
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clickable { onSortOrderChange(sortOrder) }
-                            .padding(vertical = 12.dp),
+                            .selectable(
+                                selected = selectedSortOrder == sortOrder,
+                                onClick = { selectedSortOrder = sortOrder },
+                                role = Role.RadioButton
+                            )
+                            .padding(vertical = 4.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         RadioButton(
-                            selected = currentSortOrder == sortOrder,
-                            onClick = { onSortOrderChange(sortOrder) }
+                            selected = selectedSortOrder == sortOrder,
+                            onClick = null // onClick is handled by parent
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
                             text = label,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurface
+                            style = MaterialTheme.typography.bodyMedium
                         )
                     }
                 }
-                
-                Spacer(modifier = Modifier.height(8.dp))
-                
-                TextButton(
-                    onClick = onDismiss,
-                    modifier = Modifier.align(Alignment.End)
-                ) {
-                    Text("Done")
+
+                // Sort direction (only for non-custom orders)
+                if (selectedSortOrder != SortOrder.CUSTOM) {
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    Text(
+                        text = "Sort direction",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .selectable(
+                                selected = selectedAscending,
+                                onClick = { selectedAscending = true },
+                                role = Role.RadioButton
+                            )
+                            .padding(vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        RadioButton(
+                            selected = selectedAscending,
+                            onClick = null
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.ArrowUpward,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = "Ascending (A to Z)",
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                        }
+                    }
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .selectable(
+                                selected = !selectedAscending,
+                                onClick = { selectedAscending = false },
+                                role = Role.RadioButton
+                            )
+                            .padding(vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        RadioButton(
+                            selected = !selectedAscending,
+                            onClick = null
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.ArrowDownward,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = "Descending (Z to A)",
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                        }
+                    }
                 }
             }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    onApply(selectedSortOrder, selectedAscending)
+                }
+            ) {
+                Text("Apply")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
         }
-    }
+    )
 }

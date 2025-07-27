@@ -1,118 +1,223 @@
 package com.tinhtx.localplayerapplication.data.repository
 
-import com.tinhtx.localplayerapplication.data.local.database.dao.*
+import android.content.Context
+import com.tinhtx.localplayerapplication.data.local.media.AudioMetadataExtractor
+import com.tinhtx.localplayerapplication.data.local.media.MediaScanner
+import com.tinhtx.localplayerapplication.data.local.media.MediaStoreScanner
 import com.tinhtx.localplayerapplication.domain.model.*
-import com.tinhtx.localplayerapplication.domain.repository.MusicRepository
+import com.tinhtx.localplayerapplication.domain.repository.MediaRepository
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import javax.inject.Inject
 import javax.inject.Singleton
 
+/**
+ * Implementation of MediaRepository using media scanning components
+ */
 @Singleton
-class MusicRepositoryImpl @Inject constructor(
-    private val songDao: SongDao,
-    private val albumDao: AlbumDao,
-    private val artistDao: ArtistDao,
-    private val playlistDao: PlaylistDao,
-    private val favoriteDao: FavoriteDao,
-    private val historyDao: HistoryDao
-) : MusicRepository {
-
-    // Existing implementations...
-    override suspend fun getAllSongs(): List<Song> = songDao.getAllSongs().map { it.toDomain() }
-    override suspend fun getAllAlbums(): List<Album> = albumDao.getAllAlbums().map { it.toDomain() }
-    override suspend fun getAllArtists(): List<Artist> = artistDao.getAllArtists().map { it.toDomain() }
-
-    // Statistics implementations
-    override suspend fun getSongCount(): Int = songDao.getSongCount()
-
-    override suspend fun getAlbumCount(): Int = albumDao.getAlbumCount()
-
-    override suspend fun getArtistCount(): Int = artistDao.getArtistCount()
-
-    override suspend fun getPlaylistCount(): Int = playlistDao.getPlaylistCount()
-
-    override suspend fun getFavoriteSongCount(): Int = favoriteDao.getFavoriteCount()
-
-    // Playtime methods
-    override suspend fun getTotalPlaytimeMs(): Long = songDao.getTotalDuration()
-
-    override suspend fun getTotalPlaytimeHours(): Double {
-        val totalMs = getTotalPlaytimeMs()
-        return totalMs / (1000.0 * 60.0 * 60.0) // Convert to hours
+class MediaRepositoryImpl @Inject constructor(
+    private val context: Context,
+    private val mediaScanner: MediaScanner,
+    private val mediaStoreScanner: MediaStoreScanner,
+    private val audioMetadataExtractor: AudioMetadataExtractor
+) : MediaRepository {
+    
+    // Media Scanning Operations - Mapped từ MediaScanner methods
+    override suspend fun scanAllMusic(): List<Song> {
+        return mediaScanner.scanCommonMusicDirectories()
     }
-
-    // Library size methods
-    override suspend fun getTotalLibrarySize(): Long = songDao.getTotalSize()
-
-    override suspend fun getTotalLibrarySizeMB(): Long {
-        val totalBytes = getTotalLibrarySize()
-        return totalBytes / (1024 * 1024) // Convert to MB
+    
+    override fun scanAllMusicWithProgress(): Flow<ScanProgress> {
+        return mediaScanner.scanDirectoriesWithProgress(emptyList()).map { progress ->
+            when (progress) {
+                is com.tinhtx.localplayerapplication.data.local.media.ScanProgress.Started -> 
+                    ScanProgress.Started
+                is com.tinhtx.localplayerapplication.data.local.media.ScanProgress.Progress -> 
+                    ScanProgress.Progress(
+                        processed = progress.processedFiles,
+                        total = progress.totalFiles,
+                        currentFile = progress.currentSong.path
+                    )
+                is com.tinhtx.localplayerapplication.data.local.media.ScanProgress.Completed -> 
+                    ScanProgress.Completed(
+                        totalFound = progress.songs.size,
+                        newSongs = progress.songs.size,
+                        updatedSongs = 0
+                    )
+                is com.tinhtx.localplayerapplication.data.local.media.ScanProgress.Error -> 
+                    ScanProgress.Error(
+                        message = "Scan error",
+                        exception = progress.exception
+                    )
+            }
+        }
     }
-
-    // Additional analytics methods
-    override suspend fun getAverageSongDuration(): Long {
-        val totalDuration = songDao.getTotalDuration()
-        val songCount = songDao.getSongCount()
-        return if (songCount > 0) totalDuration / songCount else 0L
+    
+    override suspend fun scanSpecificDirectories(directories: List<String>): List<Song> {
+        return mediaScanner.scanDirectories(directories)
     }
-
-    override suspend fun getRecentlyAddedCount(days: Int): Int {
-        val cutoffTime = System.currentTimeMillis() - (days * 24 * 60 * 60 * 1000L)
-        return songDao.getRecentlyAddedCount(cutoffTime)
+    
+    override suspend fun scanModifiedSongs(since: Long): List<Song> {
+        return mediaStoreScanner.getModifiedSongs(since)
     }
-
-    override suspend fun getLibraryScanCount(): Int = 0 // This would come from settings/preferences
-
-    override suspend fun getPlaybackErrorCount(): Int = 0 // This would come from error tracking
-
-    override suspend fun getNetworkErrorCount(): Int = 0 // This would come from error tracking
-
-    override suspend fun getPermissionErrorCount(): Int = 0 // This would come from error tracking
-
-    override suspend fun getSessionCount(since: Long): Int = historyDao.getSessionCount(since)
-
-    override suspend fun getPlaytimeHours(since: Long): Double {
-        val totalMs = historyDao.getTotalPlaytimeSince(since)
-        return totalMs / (1000.0 * 60.0 * 60.0)
+    
+    override suspend fun rescanLibrary(forceFullScan: Boolean) {
+        // Would trigger library scan worker - placeholder
     }
-
-    override suspend fun getMostPlayedSongs(limit: Int): List<Song> {
-        return songDao.getMostPlayedSongs(limit).map { it.toDomain() }
+    
+    // MediaStore Operations - Mapped từ MediaStoreScanner methods
+    override suspend fun getAllSongsFromMediaStore(): List<Song> {
+        return mediaStoreScanner.getAllSongs()
     }
-
-    override suspend fun getMostPlayedArtists(limit: Int): List<Artist> {
-        return artistDao.getMostPlayedArtists(limit).map { it.toDomain() }
+    
+    override suspend fun getAllAlbumsFromMediaStore(): List<Album> {
+        return mediaStoreScanner.getAllAlbums()
     }
-
-    override suspend fun getShuffleUsagePercentage(): Float = 0f // This would come from playback history
-
-    override suspend fun getRepeatUsagePercentage(): Float = 0f // This would come from playback history
-
-    override suspend fun getAverageSessionDurationMinutes(): Double = 0.0 // This would come from session tracking
-
-    override suspend fun getSkipRatePercentage(): Float = 0f // This would come from playback history
-
-    // Update statistics methods
-    override suspend fun updateArtistStatistics() {
-        artistDao.updateStatistics()
+    
+    override suspend fun getAllArtistsFromMediaStore(): List<Artist> {
+        return mediaStoreScanner.getAllArtists()
     }
-
-    override suspend fun updateAlbumStatistics() {
-        albumDao.updateStatistics()
+    
+    override suspend fun getSongFromMediaStore(mediaStoreId: Long): Song? {
+        return mediaStoreScanner.getSongById(mediaStoreId)
     }
-
-    override suspend fun updateGenreStatistics() {
-        // Implementation for genre statistics
+    
+    override suspend fun searchSongsInMediaStore(query: String): List<Song> {
+        return mediaStoreScanner.searchSongs(query)
     }
-
-    // Existing implementations continue...
-    override suspend fun insertSong(song: Song) = songDao.insertSong(song.toEntity())
-    override suspend fun updateSong(song: Song) = songDao.updateSong(song.toEntity())
-    override suspend fun deleteSongByPath(path: String) = songDao.deleteSongByPath(path)
-    override suspend fun insertArtist(artist: Artist) = artistDao.insertArtist(artist.toEntity())
-    override suspend fun insertAlbum(album: Album) = albumDao.insertAlbum(album.toEntity())
-    override suspend fun getArtistByName(name: String): Artist? = artistDao.getArtistByName(name)?.toDomain()
-    override suspend fun getAlbumByNameAndArtist(name: String, artist: String): Album? =
-        albumDao.getAlbumByNameAndArtist(name, artist)?.toDomain()
+    
+    override suspend fun getMediaStoreStatistics(): MediaStoreStatistics {
+        val stats = mediaStoreScanner.getMediaStoreStatistics()
+        return MediaStoreStatistics(
+            totalSongs = stats.songCount,
+            totalAlbums = stats.albumCount,
+            totalArtists = stats.artistCount,
+            totalDuration = stats.totalDuration,
+            totalSize = stats.totalSize,
+            averageBitrate = 0 // Not available in MediaStoreStatistics
+        )
+    }
+    
+    // Directory Management - Mapped từ MediaScanner methods
+    override suspend fun getCommonMusicDirectories(): List<String> {
+        return mediaScanner.findCommonMusicDirectories()
+    }
+    
+    override suspend fun getAudioFilesInDirectory(directory: String): List<String> {
+        val audioFormats = listOf("mp3", "wav", "flac", "m4a", "ogg")
+        return mediaScanner.getAudioFilesInDirectory(directory, audioFormats).map { it.absolutePath }
+    }
+    
+    override suspend fun validateAudioFile(filePath: String): Boolean {
+        return audioMetadataExtractor.isValidAudioFile(filePath)
+    }
+    
+    override suspend fun isDirectoryAccessible(directoryPath: String): Boolean {
+        return try {
+            val dir = java.io.File(directoryPath)
+            dir.exists() && dir.canRead()
+        } catch (e: Exception) {
+            false
+        }
+    }
+    
+    // Metadata Operations - Mapped từ AudioMetadataExtractor methods
+    override suspend fun extractMetadata(filePath: String): AudioMetadata? {
+        val metadata = audioMetadataExtractor.extractMetadata(filePath)
+        return metadata?.let {
+            AudioMetadata(
+                title = it.title,
+                artist = it.artist,
+                album = it.album,
+                genre = it.genre,
+                year = it.year,
+                trackNumber = it.trackNumber,
+                duration = it.duration,
+                bitrate = it.bitrate,
+                sampleRate = it.sampleRate,
+                fileSize = 0L // Not available in extracted metadata
+            )
+        }
+    }
+    
+    override suspend fun extractAlbumArt(filePath: String): ByteArray? {
+        val bitmap = audioMetadataExtractor.extractAlbumArt(filePath)
+        return bitmap?.let {
+            val stream = java.io.ByteArrayOutputStream()
+            it.compress(android.graphics.Bitmap.CompressFormat.JPEG, 90, stream)
+            stream.toByteArray()
+        }
+    }
+    
+    override suspend fun extractBatchMetadata(filePaths: List<String>): List<AudioMetadata> {
+        val metadataList = audioMetadataExtractor.extractMetadataBatch(filePaths)
+        return metadataList.map { metadata ->
+            AudioMetadata(
+                title = metadata.title,
+                artist = metadata.artist,
+                album = metadata.album,
+                genre = metadata.genre,
+                year = metadata.year,
+                trackNumber = metadata.trackNumber,
+                duration = metadata.duration,
+                bitrate = metadata.bitrate,
+                sampleRate = metadata.sampleRate,
+                fileSize = 0L
+            )
+        }
+    }
+    
+    override suspend fun updateSongMetadata(songId: Long, meta AudioMetadata) {
+        // Would need to update song in database - placeholder
+    }
+    
+    // Cache Operations - Basic implementations
+    override suspend fun clearMetadataCache() {
+        // Would clear metadata cache - placeholder
+    }
+    
+    override suspend fun getCacheSize(): Long {
+        return 0L // Placeholder
+    }
+    
+    override suspend fun optimizeCache() {
+        // Would optimize cache - placeholder
+    }
+    
+    // Sync Operations - Basic implementations
+    override suspend fun syncWithMediaStore(): SyncResult {
+        return SyncResult(
+            totalProcessed = 0,
+            syncDurationMs = 0L
+        )
+    }
+    
+    override suspend fun detectDeletedFiles(): List<String> {
+        return emptyList() // Placeholder
+    }
+    
+    override suspend fun detectNewFiles(): List<String> {
+        return emptyList() // Placeholder
+    }
+    
+    override suspend fun resolveConflicts(conflicts: List<MediaConflict>): List<Song> {
+        return emptyList() // Placeholder
+    }
+    
+    // Statistics and Analytics - Basic implementations
+    override suspend fun getLibraryStatistics(): LibraryStatistics {
+        return LibraryStatistics(lastUpdated = System.currentTimeMillis())
+    }
+    
+    override suspend fun getScanHistory(): List<ScanHistoryEntry> {
+        return emptyList() // Placeholder
+    }
+    
+    override suspend fun getLastScanTime(): Long {
+        return 0L // Placeholder
+    }
+    
+    override suspend fun updateLastScanTime(timestamp: Long) {
+        // Would update scan time - placeholder
+    }
 }

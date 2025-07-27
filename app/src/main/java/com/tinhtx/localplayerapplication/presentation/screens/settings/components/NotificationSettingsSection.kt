@@ -3,92 +3,82 @@ package com.tinhtx.localplayerapplication.presentation.screens.settings.componen
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
-import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import com.tinhtx.localplayerapplication.domain.model.*
+import com.tinhtx.localplayerapplication.presentation.screens.settings.NotificationAction
 
 @Composable
 fun NotificationSettingsSection(
-    settings: NotificationSettings,
-    onSettingChanged: (NotificationSettingType, Any) -> Unit,
+    showNotifications: Boolean,
+    showLockScreenControls: Boolean,
+    showAlbumArt: Boolean,
+    compactNotification: Boolean,
+    notificationActions: List<NotificationAction>,
+    onToggleNotifications: () -> Unit,
+    onToggleLockScreenControls: () -> Unit,
+    onToggleAlbumArt: () -> Unit,
+    onToggleCompactNotification: () -> Unit,
+    onCustomizeActions: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Card(
-        modifier = modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
-        ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-    ) {
+    Column(modifier = modifier) {
+        SettingsSectionHeader(
+            title = "Notifications",
+            icon = Icons.Default.Notifications
+        )
+        
+        Spacer(modifier = Modifier.height(8.dp))
+        
         Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            // Show Controls
+            // Show notifications
             SettingSwitchItem(
-                title = "Show Controls",
-                subtitle = "Display playback controls in notification",
-                icon = Icons.Default.ControlCamera,
-                checked = settings.showControls,
-                onCheckedChange = { 
-                    onSettingChanged(NotificationSettingType.SHOW_CONTROLS, it)
-                }
+                title = "Show Notifications",
+                subtitle = "Display playback controls in notification panel",
+                icon = Icons.Default.Notifications,
+                checked = showNotifications,
+                onCheckedChange = { onToggleNotifications() }
             )
-            
-            HorizontalDivider()
-            
-            // Show Album Art
+
+            // Lock screen controls
+            SettingSwitchItem(
+                title = "Lock Screen Controls",
+                subtitle = "Show playback controls on lock screen",
+                icon = Icons.Default.Lock,
+                checked = showLockScreenControls,
+                enabled = showNotifications,
+                onCheckedChange = { onToggleLockScreenControls() }
+            )
+
+            // Album art in notification
             SettingSwitchItem(
                 title = "Show Album Art",
-                subtitle = "Display album artwork in notification",
+                subtitle = "Display album artwork in notifications",
                 icon = Icons.Default.Image,
-                checked = settings.showAlbumArt,
-                onCheckedChange = { 
-                    onSettingChanged(NotificationSettingType.SHOW_ALBUM_ART, it)
-                }
+                checked = showAlbumArt,
+                enabled = showNotifications,
+                onCheckedChange = { onToggleAlbumArt() }
             )
-            
-            HorizontalDivider()
-            
-            // Colored Notification
+
+            // Compact notification
             SettingSwitchItem(
-                title = "Colored Notification",
-                subtitle = "Use album colors for notification",
-                icon = Icons.Default.Palette,
-                checked = settings.coloredNotification,
-                onCheckedChange = { 
-                    onSettingChanged(NotificationSettingType.COLORED_NOTIFICATION, it)
-                }
+                title = "Compact Notification",
+                subtitle = "Use smaller notification layout",
+                icon = Icons.Default.Compress,
+                checked = compactNotification,
+                enabled = showNotifications,
+                onCheckedChange = { onToggleCompactNotification() }
             )
-            
-            HorizontalDivider()
-            
-            // Notification Priority
-            SettingDropdownItem(
-                title = "Priority",
-                subtitle = "Notification importance level",
-                icon = Icons.Default.PriorityHigh,
-                value = settings.priority.displayName,
-                options = NotificationPriority.values().map { it.displayName },
-                onValueChange = { displayName ->
-                    val priority = NotificationPriority.values().find { it.displayName == displayName }
-                    priority?.let { onSettingChanged(NotificationSettingType.PRIORITY, it) }
-                }
-            )
-            
-            HorizontalDivider()
-            
-            // Show on Lock Screen
-            SettingSwitchItem(
-                title = "Show on Lock Screen",
-                subtitle = "Display controls on lock screen",
-                icon = Icons.Default.Lock,
-                checked = settings.showOnLockScreen,
-                onCheckedChange = { 
-                    onSettingChanged(NotificationSettingType.SHOW_ON_LOCK_SCREEN, it)
-                }
+
+            // Customize actions
+            SettingItem(
+                title = "Notification Actions",
+                subtitle = "${notificationActions.size} actions configured",
+                icon = Icons.Default.TouchApp,
+                enabled = showNotifications,
+                onClick = onCustomizeActions
             )
         }
     }
