@@ -3,9 +3,9 @@ package com.tinhtx.localplayerapplication.core.worker
 import android.content.Context
 import androidx.hilt.work.HiltWorker
 import androidx.work.*
-import com.tinhtx.localplayerapplication.data.repository.MusicRepository
-import com.tinhtx.localplayerapplication.data.repository.SettingsRepository
-import com.tinhtx.localplayerapplication.domain.model.AnalyticsData
+import androidx.work.CoroutineWorker
+import com.tinhtx.localplayerapplication.domain.repository.MusicRepository
+import com.tinhtx.localplayerapplication.domain.repository.SettingsRepository
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 import kotlinx.coroutines.delay
@@ -294,7 +294,7 @@ class AnalyticsWorker @AssistedInject constructor(
         }
     }
 
-    private suspend fun uploadAnalyticsData( Map<String, Any>): Boolean {
+    private suspend fun uploadAnalyticsData(data: Map<String, Any>): Boolean {
         return try {
             setProgress(createProgressData(90, "Uploading to analytics service..."))
             
@@ -383,7 +383,7 @@ class AnalyticsWorker @AssistedInject constructor(
     }
 
     private data class AnalyticsResult(
-        var  Map<String, Any> = emptyMap(),
+        var data: Map<String, Any> = emptyMap(),
         var uploadSuccess: Boolean = false
     )
 }

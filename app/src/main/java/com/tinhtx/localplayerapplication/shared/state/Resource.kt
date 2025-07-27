@@ -1,4 +1,4 @@
-package com.tinhtx.localplayerapplication.presentation.shared.state
+package com.tinhtx.localplayerapplication.shared.state
 
 /**
  * A generic wrapper class that represents a resource with loading, success, and error states
@@ -8,20 +8,20 @@ sealed class Resource<out T> {
     /**
      * Loading state
      */
-    data class Loading<out T>(val  T? = null) : Resource<T>()
-    
+    data class Loading<out T>(val data: T? = null) : Resource<T>()
+
     /**
      * Success state with data
      */
-    data class Success<out T>(val  T) : Resource<T>()
-    
+    data class Success<out T>(val data: T) : Resource<T>()
+
     /**
      * Error state with error message and optional data
      */
     data class Error<out T>(
         val message: String,
         val throwable: Throwable? = null,
-        val  T? = null
+        val data: T? = null
     ) : Resource<T>()
     
     /**
@@ -117,20 +117,20 @@ sealed class Resource<out T> {
         /**
          * Create loading resource
          */
-        fun <T> loading( T? = null): Resource<T> = Loading(data)
-        
+        fun <T> loading(data: T? = null): Resource<T> = Loading(data)
+
         /**
          * Create success resource
          */
-        fun <T> success( T): Resource<T> = Success(data)
-        
+        fun <T> success(data: T): Resource<T> = Success(data)
+
         /**
          * Create error resource
          */
         fun <T> error(
             message: String,
             throwable: Throwable? = null,
-             T? = null
+            data: T? = null
         ): Resource<T> = Error(message, throwable, data)
         
         /**
@@ -141,7 +141,7 @@ sealed class Resource<out T> {
         /**
          * Create resource from nullable data
          */
-        fun <T> fromNullable( T?, errorMessage: String = "Data is null"): Resource<T> =
+        fun <T> fromNullable(data: T?, errorMessage: String = "Data is null"): Resource<T> =
             data?.let { success(it) } ?: error(errorMessage)
         
         /**

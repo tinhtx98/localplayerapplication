@@ -10,18 +10,18 @@ interface FavoriteDao {
     
     @Query("""
         SELECT s.* FROM songs s
-        INNER JOIN favorites f ON s.id = f.song_id
-        ORDER BY f.added_at DESC
+        INNER JOIN favorites f ON s.id = f.songId
+        ORDER BY f.addedAt DESC
     """)
     fun getFavoriteSongs(): Flow<List<SongEntity>>
     
-    @Query("SELECT * FROM favorites ORDER BY added_at DESC")
+    @Query("SELECT * FROM favorites ORDER BY addedAt DESC")
     fun getAllFavorites(): Flow<List<FavoriteEntity>>
     
-    @Query("SELECT * FROM favorites WHERE song_id = :songId")
+    @Query("SELECT * FROM favorites WHERE songId = :songId")
     suspend fun getFavoriteForSong(songId: Long): FavoriteEntity?
     
-    @Query("SELECT EXISTS(SELECT 1 FROM favorites WHERE song_id = :songId)")
+    @Query("SELECT EXISTS(SELECT 1 FROM favorites WHERE songId = :songId)")
     suspend fun isSongFavorite(songId: Long): Boolean
     
     @Insert(onConflict = OnConflictStrategy.REPLACE)
@@ -30,7 +30,7 @@ interface FavoriteDao {
     @Delete
     suspend fun deleteFavorite(favorite: FavoriteEntity)
     
-    @Query("DELETE FROM favorites WHERE song_id = :songId")
+    @Query("DELETE FROM favorites WHERE songId = :songId")
     suspend fun deleteFavoriteForSong(songId: Long)
     
     @Query("DELETE FROM favorites")

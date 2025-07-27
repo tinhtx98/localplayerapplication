@@ -106,11 +106,12 @@ fun Context.isTablet(): Boolean {
     return (resources.configuration.screenLayout and Configuration.SCREENLAYOUT_SIZE_MASK) >= Configuration.SCREENLAYOUT_SIZE_LARGE
 }
 
-// Flow Extensions
+/**
+ * Convert Flow to Result without initial loading state
+ */
 fun <T> Flow<T>.asResult(): Flow<Result<T>> {
     return this
         .map<T, Result<T>> { Result.success(it) }
-        .onStart { emit(Result.success(null)) }
         .catch { emit(Result.failure(it)) }
 }
 

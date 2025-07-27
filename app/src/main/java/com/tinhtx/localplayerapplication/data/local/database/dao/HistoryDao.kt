@@ -7,57 +7,123 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface HistoryDao {
-    
-    @Query("""
-        SELECT s.* FROM songs s
-        INNER JOIN history h ON s.id = h.song_id
-        ORDER BY h.played_at DESC
-        LIMIT :limit
-    """)
-    fun getRecentlyPlayedSongs(limit: Int = 50): Flow<List<SongEntity>>
-    
-    @Query("SELECT * FROM history ORDER BY played_at DESC LIMIT :limit")
-    fun getRecentHistory(limit: Int = 100): Flow<List<HistoryEntity>>
-    
-    @Query("SELECT * FROM history WHERE song_id = :songId ORDER BY played_at DESC")
-    fun getSongHistory(songId: Long): Flow<List<HistoryEntity>>
-    
-    @Query("""
-        SELECT COUNT(*) FROM history 
-        WHERE song_id = :songId AND played_at >= :since
-    """)
-    suspend fun getPlayCountSince(songId: Long, since: Long): Int
-    
-    @Query("SELECT * FROM history WHERE played_at >= :since ORDER BY played_at DESC")
-    fun getHistorySince(since: Long): Flow<List<HistoryEntity>>
-    
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
+
+    @Query("SELECT * FROM history ORDER BY playedAt DESC")
+    suspend fun getAllHistory(): List<HistoryEntity>
+
+    @Query("SELECT * FROM history ORDER BY playedAt DESC LIMIT :limit")
+    suspend fun getRecentHistory(limit: Int): List<HistoryEntity>
+
+    @Query("SELECT * FROM history WHERE songId = :songId ORDER BY playedAt DESC")
+    suspend fun getHistoryForSong(songId: Long): List<HistoryEntity>
+
+    @Insert
     suspend fun insertHistory(history: HistoryEntity)
-    
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertHistories(histories: List<HistoryEntity>)
-    
+
     @Delete
     suspend fun deleteHistory(history: HistoryEntity)
-    
-    @Query("DELETE FROM history WHERE id = :id")
-    suspend fun deleteHistoryById(id: Long)
-    
-    @Query("DELETE FROM history WHERE song_id = :songId")
-    suspend fun deleteHistoryForSong(songId: Long)
-    
-    @Query("DELETE FROM history WHERE played_at < :before")
-    suspend fun deleteHistoryBefore(before: Long)
-    
+
+    @Query("DELETE FROM history WHERE playedAt < :cutoffTime")
+    suspend fun deleteOldHistory(cutoffTime: Long)
+
     @Query("DELETE FROM history")
-    suspend fun deleteAllHistory()
-    
-    @Query("SELECT COUNT(*) FROM history")
-    suspend fun getHistoryCount(): Int
-    
+    suspend fun clearAllHistory()
+
+    // ✅ ADD: Missing methods that MusicRepositoryImpl needs
+    @Query("DELETE FROM history")
+    suspend fun deleteAllHistory() // Alias for clearAllHistory
+
     @Query("""
-        SELECT AVG(completion_percentage) FROM history 
-        WHERE song_id = :songId AND completion_percentage > 0.1
+        SELECT DISTINCT s.* FROM songs s 
+        INNER JOIN history h ON s.id = h.songId 
+        ORDER BY h.playedAt DESC 
+        LIMIT :limit
     """)
-    suspend fun getAverageCompletionRate(songId: Long): Float
+    suspend fun getRecentlyPlayedSongs(limit: Int): List<SongEntity>
+
+    @Query("SELECT AVG(completionPercentage) FROM history WHERE playedAt > :since")
+    suspend fun getAverageCompletionRate(since: Long): Float
+
+    @Query("SELECT COUNT(*) FROM history WHERE playedAt > :since")
+    suspend fun getPlayCountSince(since: Long): Int
+
+    // Additional analytics methods
+    @Query("SELECT COUNT(DISTINCT sessionId) FROM history WHERE playedAt > :since")
+    suspend fun getSessionCount(since: Long): Int
+
+    @Query("SELECT SUM(playDuration) FROM history WHERE playedAt > :since")
+    suspend fun getTotalPlaytimeSince(since: Long): Long
+
+    @Query("SELECT AVG(playDuration) FROM history WHERE playedAt > :since")
+    suspend fun getAveragePlayDuration(since: Long): Long
+
+    @Query("SELECT COUNT(*) FROM history WHERE completionPercentage >= 0.8 AND playedAt > :since")
+    suspend fun getCompletedPlaysCount(since: Long): Int
+
+    @Query("SELECT COUNT(*) FROM history WHERE completionPercentage < 0.1 AND playedAt > :since")
+    suspend fun getSkippedPlaysCount(since: Long): Int
+
+    @Query("SELECT source, COUNT(*) as count FROM history WHERE playedAt > :since GROUP BY source ORDER BY count DESC")
+    suspend fun getPlaySourceStats(since: Long): List<SourceStat>
+
+    @Query("SELECT * FROM history WHERE completionPercentage >= :minCompletion ORDER BY playedAt DESC")
+    fun getCompletedPlaysFlow(minCompletion: Float = 0.8f): Flow<List<HistoryEntity>>
+
+    // ✅ ADD: More detailed analytics methods
+    @Query("""
+        SELECT songId, COUNT(*) as playCount 
+        FROM history 
+        WHERE playedAt > :since 
+        GROUP BY songId 
+        ORDER BY playCount DESC 
+        LIMIT :limit
+    """)
+    suspend fun getMostPlayedSongIds(since: Long, limit: Int): List<SongPlayCount>
+
+    @Query("""
+        SELECT h.*, s.title, s.artist, s.album 
+        FROM history h 
+        INNER JOIN songs s ON h.songId = s.id 
+        WHERE h.playedAt > :since 
+        ORDER BY h.playedAt DESC
+    """)
+    suspend fun getDetailedHistorySince(since: Long): List<DetailedHistoryEntity>
+
+    @Query("SELECT COUNT(DISTINCT DATE(playedAt/1000, 'unixepoch')) FROM history WHERE playedAt > :since")
+    suspend fun getActiveDaysCount(since: Long): Int
+
+    @Query("""
+        SELECT AVG(sessionDuration) FROM (
+            SELECT sessionId, SUM(playDuration) as sessionDuration 
+            FROM history 
+            WHERE playedAt > :since 
+            GROUP BY sessionId
+        )
+    """)
+    suspend fun getAverageSessionDuration(since: Long): Long
 }
+
+// ✅ ADD: Data classes for query results
+data class SourceStat(
+    val source: String?,
+    val count: Int
+)
+
+data class SongPlayCount(
+    val songId: Long,
+    val playCount: Int
+)
+
+data class DetailedHistoryEntity(
+    val id: Long,
+    val songId: Long,
+    val playedAt: Long,
+    val playDuration: Long,
+    val completionPercentage: Float,
+    val source: String?,
+    val sessionId: String,
+    val skipped: Boolean,
+    val title: String,
+    val artist: String,
+    val album: String
+)

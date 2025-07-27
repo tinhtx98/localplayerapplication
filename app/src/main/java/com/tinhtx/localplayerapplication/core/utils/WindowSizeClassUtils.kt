@@ -4,7 +4,10 @@ import androidx.compose.material3.windowsizeclass.WindowSizeClass
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 
 object WindowSizeClassUtils {
     
@@ -81,31 +84,31 @@ object WindowSizeClassUtils {
     }
     
     data class DynamicSizes(
-        val cardWidth: androidx.compose.ui.unit.Dp,
-        val imageSize: androidx.compose.ui.unit.Dp,
-        val titleSize: androidx.compose.ui.unit.TextUnit,
-        val subtitleSize: androidx.compose.ui.unit.TextUnit
+        val cardWidth: Dp,
+        val imageSize: Dp,
+        val titleSize: TextUnit,
+        val subtitleSize: TextUnit
     ) {
         companion object {
             val Compact = DynamicSizes(
                 cardWidth = 160.dp,
                 imageSize = 140.dp,
-                titleSize = 14.androidx.compose.ui.unit.sp,
-                subtitleSize = 12.androidx.compose.ui.unit.sp
+                titleSize = 14.sp,
+                subtitleSize = 12.sp
             )
             
             val Medium = DynamicSizes(
                 cardWidth = 180.dp,
                 imageSize = 160.dp,
-                titleSize = 16.androidx.compose.ui.unit.sp,
-                subtitleSize = 14.androidx.compose.ui.unit.sp
+                titleSize = 16.sp,
+                subtitleSize = 14.sp
             )
             
             val Expanded = DynamicSizes(
                 cardWidth = 200.dp,
                 imageSize = 180.dp,
-                titleSize = 18.androidx.compose.ui.unit.sp,
-                subtitleSize = 16.androidx.compose.ui.unit.sp
+                titleSize = 18.sp,
+                subtitleSize = 16.sp
             )
         }
     }

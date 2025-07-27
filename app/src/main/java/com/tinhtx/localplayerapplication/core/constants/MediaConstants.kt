@@ -1,74 +1,42 @@
 package com.tinhtx.localplayerapplication.core.constants
 
+/**
+ * Media playback related constants
+ */
 object MediaConstants {
-    // Audio Formats
-    val SUPPORTED_AUDIO_FORMATS = arrayOf(
-        "mp3", "m4a", "aac", "ogg", "wav", "flac", "wma", "3gp", "mp4"
-    )
+    // Media Session
+    const val MEDIA_SESSION_TAG = "LocalPlayerMediaSession"
+    const val MEDIA_SESSION_ID = "local_player_session"
     
-    val SUPPORTED_MIME_TYPES = arrayOf(
-        "audio/mpeg",
-        "audio/mp4",
-        "audio/aac",
-        "audio/ogg",
-        "audio/wav",
-        "audio/flac",
-        "audio/x-ms-wma",
-        "audio/3gpp",
-        "video/mp4"
-    )
+    // Playback Actions
+    const val ACTION_PLAY = "action_play"
+    const val ACTION_PAUSE = "action_pause"
+    const val ACTION_STOP = "action_stop"
+    const val ACTION_SKIP_NEXT = "action_skip_next"
+    const val ACTION_SKIP_PREVIOUS = "action_skip_previous"
+    const val ACTION_PLAY_PAUSE = "action_play_pause"
+    const val ACTION_SEEK_TO = "action_seek_to"
+    const val ACTION_SET_REPEAT_MODE = "action_set_repeat_mode"
+    const val ACTION_SET_SHUFFLE_MODE = "action_set_shuffle_mode"
     
-    // MediaStore Projections
-    val SONG_PROJECTION = arrayOf(
-        "audio._id",
-        "audio.title",
-        "audio.artist",
-        "audio.album",
-        "audio.duration",
-        "audio.data",
-        "audio.date_added",
-        "audio.album_id",
-        "audio.artist_id",
-        "audio.track",
-        "audio.year",
-        "audio.size"
-    )
+    // Custom Actions
+    const val ACTION_TOGGLE_FAVORITE = "action_toggle_favorite"
+    const val ACTION_ADD_TO_QUEUE = "action_add_to_queue"
+    const val ACTION_REMOVE_FROM_QUEUE = "action_remove_from_queue"
+    const val ACTION_CLEAR_QUEUE = "action_clear_queue"
     
-    val ALBUM_PROJECTION = arrayOf(
-        "album._id",
-        "album.album",
-        "album.artist",
-        "album.numsongs",
-        "album.first_year",
-        "album.last_year"
-    )
-    
-    val ARTIST_PROJECTION = arrayOf(
-        "artist._id",
-        "artist.artist",
-        "artist.number_of_albums",
-        "artist.number_of_tracks"
-    )
-    
-    // Selection Clauses
-    const val SONG_SELECTION = "audio.is_music = 1 AND audio.duration >= ?"
-    val SONG_SELECTION_ARGS = arrayOf("30000") // 30 seconds minimum
-    
-    const val ALBUM_SELECTION = "album.numsongs > 0"
-    const val ARTIST_SELECTION = "artist.number_of_tracks > 0"
-    
-    // Sort Orders
-    const val SONG_SORT_ORDER = "audio.title ASC"
-    const val ALBUM_SORT_ORDER = "album.album ASC"
-    const val ARTIST_SORT_ORDER = "artist.artist ASC"
+    // Media Metadata Keys
+    const val METADATA_KEY_ALBUM_ART_URI = "android.media.metadata.ALBUM_ART_URI"
+    const val METADATA_KEY_MEDIA_ID = "android.media.metadata.MEDIA_ID"
+    const val METADATA_KEY_MEDIA_URI = "android.media.metadata.MEDIA_URI"
     
     // Playback States
-    const val STATE_NONE = 0
-    const val STATE_STOPPED = 1
-    const val STATE_PAUSED = 2
-    const val STATE_PLAYING = 3
-    const val STATE_BUFFERING = 4
-    const val STATE_ERROR = 5
+    const val PLAYBACK_STATE_IDLE = 0
+    const val PLAYBACK_STATE_PLAYING = 1
+    const val PLAYBACK_STATE_PAUSED = 2
+    const val PLAYBACK_STATE_STOPPED = 3
+    const val PLAYBACK_STATE_BUFFERING = 4
+    const val PLAYBACK_STATE_ERROR = 5
     
     // Repeat Modes
     const val REPEAT_MODE_OFF = 0
@@ -77,42 +45,79 @@ object MediaConstants {
     
     // Shuffle Modes
     const val SHUFFLE_MODE_OFF = 0
-    const val SHUFFLE_MODE_ON = 1
+    const val SHUFFLE_MODE_ALL = 1
     
-    // Audio Focus
-    const val AUDIO_FOCUS_GAIN = 1
-    const val AUDIO_FOCUS_LOSS = -1
-    const val AUDIO_FOCUS_LOSS_TRANSIENT = -2
-    const val AUDIO_FOCUS_LOSS_TRANSIENT_CAN_DUCK = -3
+    // Audio Format Support
+    val SUPPORTED_AUDIO_FORMATS = arrayOf(
+        "mp3", "flac", "wav", "aac", "ogg", "m4a", "wma", "opus"
+    )
     
-    // Seek Values
-    const val SEEK_FORWARD_MS = 15000L
-    const val SEEK_BACKWARD_MS = 15000L
+    val SUPPORTED_MIME_TYPES = arrayOf(
+        "audio/mpeg",
+        "audio/flac", 
+        "audio/wav",
+        "audio/aac",
+        "audio/ogg",
+        "audio/mp4",
+        "audio/x-ms-wma",
+        "audio/opus"
+    )
     
-    // Album Art
-    const val ALBUM_ART_SIZE = 512
-    const val ALBUM_ART_QUALITY = 85
+    // Playback Speed
+    const val MIN_PLAYBACK_SPEED = 0.25f
+    const val MAX_PLAYBACK_SPEED = 3.0f
+    const val PLAYBACK_SPEED_NORMAL = 1.0f
     
-    // Media Session
-    const val MEDIA_SESSION_TAG = "LocalPlayerMediaSession"
+    // Volume
+    const val MIN_VOLUME = 0.0f
+    const val MAX_VOLUME = 1.0f
+    
+    // Seeking
+    const val SEEK_STEP_MS = 10000L // 10 seconds
+    const val FAST_SEEK_STEP_MS = 30000L // 30 seconds
+    
+    // Cross Fade
+    const val MIN_CROSSFADE_DURATION = 0
+    const val MAX_CROSSFADE_DURATION = 10 // seconds
     
     // Queue
-    const val MAX_QUEUE_SIZE = 1000
+    const val MAX_QUEUE_SIZE = 500
+    const val SHUFFLE_BUFFER_SIZE = 10
     
-    // Crossfade
-    const val DEFAULT_CROSSFADE_DURATION = 3000L
+    // Audio Effects
+    const val EQUALIZER_BAND_COUNT = 10
+    const val BASS_BOOST_MAX = 1000
+    const val VIRTUALIZER_MAX = 1000
     
-    // Equalizer
-    const val EQUALIZER_ENABLED = "equalizer_enabled"
-    const val EQUALIZER_PRESET = "equalizer_preset"
+    // Media Store Projections
+    val SONG_PROJECTION = arrayOf(
+        android.provider.MediaStore.Audio.Media._ID,
+        android.provider.MediaStore.Audio.Media.TITLE,
+        android.provider.MediaStore.Audio.Media.ARTIST,
+        android.provider.MediaStore.Audio.Media.ALBUM,
+        android.provider.MediaStore.Audio.Media.ALBUM_ID,
+        android.provider.MediaStore.Audio.Media.DURATION,
+        android.provider.MediaStore.Audio.Media.DATA,
+        android.provider.MediaStore.Audio.Media.SIZE,
+        android.provider.MediaStore.Audio.Media.MIME_TYPE,
+        android.provider.MediaStore.Audio.Media.DATE_ADDED,
+        android.provider.MediaStore.Audio.Media.DATE_MODIFIED,
+        android.provider.MediaStore.Audio.Media.YEAR,
+        android.provider.MediaStore.Audio.Media.TRACK
+    )
     
-    // Error Codes
-    const val ERROR_CODE_UNSPECIFIED = 0
-    const val ERROR_CODE_IO_UNSPECIFIED = 2000
-    const val ERROR_CODE_IO_NETWORK_CONNECTION_FAILED = 2001
-    const val ERROR_CODE_IO_FILE_NOT_FOUND = 2005
-    const val ERROR_CODE_PARSING_CONTAINER_MALFORMED = 3001
-    const val ERROR_CODE_PARSING_MANIFEST_MALFORMED = 3002
-    const val ERROR_CODE_DECODER_INIT_FAILED = 4001
-    const val ERROR_CODE_DECODER_QUERY_FAILED = 4002
+    val ALBUM_PROJECTION = arrayOf(
+        android.provider.MediaStore.Audio.Albums._ID,
+        android.provider.MediaStore.Audio.Albums.ALBUM,
+        android.provider.MediaStore.Audio.Albums.ARTIST,
+        android.provider.MediaStore.Audio.Albums.FIRST_YEAR,
+        android.provider.MediaStore.Audio.Albums.NUMBER_OF_SONGS
+    )
+    
+    val ARTIST_PROJECTION = arrayOf(
+        android.provider.MediaStore.Audio.Artists._ID,
+        android.provider.MediaStore.Audio.Artists.ARTIST,
+        android.provider.MediaStore.Audio.Artists.NUMBER_OF_ALBUMS,
+        android.provider.MediaStore.Audio.Artists.NUMBER_OF_TRACKS
+    )
 }

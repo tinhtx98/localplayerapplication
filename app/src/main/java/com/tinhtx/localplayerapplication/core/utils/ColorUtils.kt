@@ -200,7 +200,7 @@ object ColorUtils {
     /**
      * Calculate color distance
      */
-    fun calculateColorDistance(color1: ComposeColor, color2: ComposeColor): Double {
+    fun calculateColorDistance(color1: ComposeColor, color2: ComposeColor): Float {
         val r1 = color1.red * 255
         val g1 = color1.green * 255
         val b1 = color1.blue * 255

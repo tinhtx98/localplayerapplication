@@ -35,7 +35,7 @@ data class SongEntity(
     val duration: Long,
     
     @ColumnInfo(name = "data")
-    val  String, // File path
+    val  data: String, // File path
     
     @ColumnInfo(name = "date_added")
     val dateAdded: Long,

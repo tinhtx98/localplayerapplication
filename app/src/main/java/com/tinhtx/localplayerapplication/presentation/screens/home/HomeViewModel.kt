@@ -7,6 +7,7 @@ import com.tinhtx.localplayerapplication.domain.usecase.favorites.GetFavoritesUs
 import com.tinhtx.localplayerapplication.domain.usecase.favorites.AddToFavoritesUseCase
 import com.tinhtx.localplayerapplication.domain.usecase.favorites.RemoveFromFavoritesUseCase
 import com.tinhtx.localplayerapplication.domain.usecase.music.*
+import com.tinhtx.localplayerapplication.domain.usecase.player.PlaySongUseCase
 import com.tinhtx.localplayerapplication.domain.usecase.playlist.GetPlaylistsUseCase
 import com.tinhtx.localplayerapplication.domain.usecase.user.GetUserProfileUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -17,15 +18,15 @@ import javax.inject.Inject
 @HiltViewModel
 class HomeViewModel @Inject constructor(
     private val getAllSongsUseCase: GetAllSongsUseCase,
-    private val getAllAlbumsUseCase: com.tinhtx.localplayerapplication.domain.usecase.music.GetAllAlbumsUseCase,
-    private val getAllArtistsUseCase: com.tinhtx.localplayerapplication.domain.usecase.music.GetAllArtistsUseCase,
+    private val getAllAlbumsUseCase: GetAllAlbumsUseCase,
+    private val getAllArtistsUseCase: GetAllArtistsUseCase,
     private val getPlaylistsUseCase: GetPlaylistsUseCase,
     private val getFavoritesUseCase: GetFavoritesUseCase,
     private val addToFavoritesUseCase: AddToFavoritesUseCase,
     private val removeFromFavoritesUseCase: RemoveFromFavoritesUseCase,
     private val getUserProfileUseCase: GetUserProfileUseCase,
     private val scanMediaLibraryUseCase: ScanMediaLibraryUseCase,
-    private val playMusicUseCase: com.tinhtx.localplayerapplication.domain.usecase.player.PlaySongUseCase
+    private val playMusicUseCase: PlaySongUseCase
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(HomeUiState())
@@ -77,7 +78,7 @@ class HomeViewModel @Inject constructor(
                         isEmpty = processedData.isEmpty
                     )
                 }
-            } catch (exception) {
+            } catch (exception: Exception) {
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
                     error = exception.message ?: "Failed to load music data"
@@ -182,7 +183,7 @@ class HomeViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 playMusicUseCase(song, "home_screen")
-            } catch (exception) {
+            } catch (exception: Exception) {
                 // Handle play error
             }
         }
@@ -195,7 +196,7 @@ class HomeViewModel @Inject constructor(
                 // This would typically involve getting songs by album ID
                 // For now, we'll just log the action
                 android.util.Log.d("HomeViewModel", "Playing album: ${album.displayName}")
-            } catch (exception) {
+            } catch (exception: Exception) {
                 // Handle play error
             }
         }
@@ -206,7 +207,7 @@ class HomeViewModel @Inject constructor(
             try {
                 // Get songs from artist and play shuffled
                 android.util.Log.d("HomeViewModel", "Playing artist: ${artist.displayName}")
-            } catch (exception) {
+            } catch (exception: Exception) {
                 // Handle play error
             }
         }
@@ -220,7 +221,7 @@ class HomeViewModel @Inject constructor(
                 } else {
                     addToFavoritesUseCase(song.id)
                 }
-            } catch (exception) {
+            } catch (exception: Exception) {
                 // Handle error
             }
         }
@@ -254,7 +255,7 @@ class HomeViewModel @Inject constructor(
             try {
                 scanMediaLibraryUseCase.performFullScan()
                 loadHomeData()
-            } catch (exception) {
+            } catch (exception: Exception) {
                 _uiState.value = _uiState.value.copy(
                     error = "Failed to scan media library: ${exception.message}"
                 )

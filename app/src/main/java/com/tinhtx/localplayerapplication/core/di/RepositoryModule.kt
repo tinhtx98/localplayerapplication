@@ -35,4 +35,10 @@ abstract class RepositoryModule {
     abstract fun bindMediaRepository(
         mediaRepositoryImpl: MediaRepositoryImpl
     ): MediaRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindSettingsRepository(
+        settingsRepositoryImpl: SettingsRepositoryImpl
+    ): SettingsRepository
 }

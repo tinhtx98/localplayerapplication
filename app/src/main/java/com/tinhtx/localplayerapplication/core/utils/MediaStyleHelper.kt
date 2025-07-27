@@ -6,9 +6,12 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
 import android.os.Build
+import androidx.annotation.OptIn
 import androidx.core.app.NotificationCompat
+import androidx.media.app.NotificationCompat as MediaNotificationCompat // Correct import
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
+import androidx.media3.common.util.UnstableApi
 import androidx.media3.session.MediaSession
 import com.tinhtx.localplayerapplication.core.constants.NotificationConstants
 import com.tinhtx.localplayerapplication.presentation.MainActivity
@@ -18,6 +21,7 @@ object MediaStyleHelper {
     /**
      * Create media style notification
      */
+    @OptIn(UnstableApi::class)
     fun createMediaNotification(
         context: Context,
         mediaSession: MediaSession,
@@ -83,7 +87,7 @@ object MediaStyleHelper {
             .addAction(nextAction)
             .addAction(stopAction)
             .setStyle(
-                androidx.media.app.NotificationCompat.MediaStyle()
+                MediaNotificationCompat.MediaStyle()
                     .setMediaSession(mediaSession.sessionCompatToken)
                     .setShowActionsInCompactView(*NotificationConstants.SHOW_ACTIONS_IN_COMPACT_VIEW)
                     .setShowCancelButton(true)
@@ -174,7 +178,8 @@ object MediaStyleHelper {
         val duration: Long,
         val artworkBitmap: Bitmap?
     )
-    
+
+    @OptIn(UnstableApi::class)
     fun extractNotificationInfo(mediaMetadata: MediaMetadata, artworkBitmap: Bitmap?): NotificationInfo {
         return NotificationInfo(
             title = mediaMetadata.title?.toString() ?: "Unknown",

@@ -1,19 +1,10 @@
 package com.tinhtx.localplayerapplication.data.repository
 
-import com.tinhtx.localplayerapplication.core.constants.AppConstants
-import com.tinhtx.localplayerapplication.core.di.IoDispatcher
-import com.tinhtx.localplayerapplication.data.local.database.dao.AlbumDao
-import com.tinhtx.localplayerapplication.data.local.database.dao.ArtistDao
-import com.tinhtx.localplayerapplication.data.local.database.dao.SongDao
-import com.tinhtx.localplayerapplication.data.local.media.MediaScanner
-import com.tinhtx.localplayerapplication.domain.model.Album
-import com.tinhtx.localplayerapplication.domain.model.Artist
-import com.tinhtx.localplayerapplication.domain.model.Song
+import com.tinhtx.localplayerapplication.data.local.database.dao.*
+import com.tinhtx.localplayerapplication.domain.model.*
 import com.tinhtx.localplayerapplication.domain.repository.MusicRepository
-import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.withContext
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -22,143 +13,106 @@ class MusicRepositoryImpl @Inject constructor(
     private val songDao: SongDao,
     private val albumDao: AlbumDao,
     private val artistDao: ArtistDao,
-    private val mediaScanner: MediaScanner,
-    @IoDispatcher private val ioDispatcher: CoroutineDispatcher
+    private val playlistDao: PlaylistDao,
+    private val favoriteDao: FavoriteDao,
+    private val historyDao: HistoryDao
 ) : MusicRepository {
-    
-    override fun getAllSongs(): Flow<List<Song>> {
-        return songDao.getAllSongs().map { entities ->
-            entities.map { it.toDomain() }
-        }
+
+    // Existing implementations...
+    override suspend fun getAllSongs(): List<Song> = songDao.getAllSongs().map { it.toDomain() }
+    override suspend fun getAllAlbums(): List<Album> = albumDao.getAllAlbums().map { it.toDomain() }
+    override suspend fun getAllArtists(): List<Artist> = artistDao.getAllArtists().map { it.toDomain() }
+
+    // Statistics implementations
+    override suspend fun getSongCount(): Int = songDao.getSongCount()
+
+    override suspend fun getAlbumCount(): Int = albumDao.getAlbumCount()
+
+    override suspend fun getArtistCount(): Int = artistDao.getArtistCount()
+
+    override suspend fun getPlaylistCount(): Int = playlistDao.getPlaylistCount()
+
+    override suspend fun getFavoriteSongCount(): Int = favoriteDao.getFavoriteCount()
+
+    // Playtime methods
+    override suspend fun getTotalPlaytimeMs(): Long = songDao.getTotalDuration()
+
+    override suspend fun getTotalPlaytimeHours(): Double {
+        val totalMs = getTotalPlaytimeMs()
+        return totalMs / (1000.0 * 60.0 * 60.0) // Convert to hours
     }
-    
-    override suspend fun getSongById(id: Long): Song? = withContext(ioDispatcher) {
-        songDao.getSongById(id)?.toDomain()
+
+    // Library size methods
+    override suspend fun getTotalLibrarySize(): Long = songDao.getTotalSize()
+
+    override suspend fun getTotalLibrarySizeMB(): Long {
+        val totalBytes = getTotalLibrarySize()
+        return totalBytes / (1024 * 1024) // Convert to MB
     }
-    
-    override fun getSongsByAlbum(albumId: Long): Flow<List<Song>> {
-        return songDao.getSongsByAlbum(albumId).map { entities ->
-            entities.map { it.toDomain() }
-        }
+
+    // Additional analytics methods
+    override suspend fun getAverageSongDuration(): Long {
+        val totalDuration = songDao.getTotalDuration()
+        val songCount = songDao.getSongCount()
+        return if (songCount > 0) totalDuration / songCount else 0L
     }
-    
-    override fun getSongsByArtist(artistId: Long): Flow<List<Song>> {
-        return songDao.getSongsByArtist(artistId).map { entities ->
-            entities.map { it.toDomain() }
-        }
+
+    override suspend fun getRecentlyAddedCount(days: Int): Int {
+        val cutoffTime = System.currentTimeMillis() - (days * 24 * 60 * 60 * 1000L)
+        return songDao.getRecentlyAddedCount(cutoffTime)
     }
-    
-    override fun searchSongs(query: String): Flow<List<Song>> {
-        return songDao.searchSongs(query).map { entities ->
-            entities.map { it.toDomain() }
-        }
+
+    override suspend fun getLibraryScanCount(): Int = 0 // This would come from settings/preferences
+
+    override suspend fun getPlaybackErrorCount(): Int = 0 // This would come from error tracking
+
+    override suspend fun getNetworkErrorCount(): Int = 0 // This would come from error tracking
+
+    override suspend fun getPermissionErrorCount(): Int = 0 // This would come from error tracking
+
+    override suspend fun getSessionCount(since: Long): Int = historyDao.getSessionCount(since)
+
+    override suspend fun getPlaytimeHours(since: Long): Double {
+        val totalMs = historyDao.getTotalPlaytimeSince(since)
+        return totalMs / (1000.0 * 60.0 * 60.0)
     }
-    
-    override fun getRecentlyPlayedSongs(limit: Int): Flow<List<Song>> {
-        return songDao.getRecentlyPlayedSongs(limit).map { entities ->
-            entities.map { it.toDomain() }
-        }
+
+    override suspend fun getMostPlayedSongs(limit: Int): List<Song> {
+        return songDao.getMostPlayedSongs(limit).map { it.toDomain() }
     }
-    
-    override fun getMostPlayedSongs(limit: Int): Flow<List<Song>> {
-        return songDao.getMostPlayedSongs(limit).map { entities ->
-            entities.map { it.toDomain() }
-        }
+
+    override suspend fun getMostPlayedArtists(limit: Int): List<Artist> {
+        return artistDao.getMostPlayedArtists(limit).map { it.toDomain() }
     }
-    
-    override fun getRecentlyAddedSongs(limit: Int): Flow<List<Song>> {
-        return songDao.getRecentlyAddedSongs(limit).map { entities ->
-            entities.map { it.toDomain() }
-        }
+
+    override suspend fun getShuffleUsagePercentage(): Float = 0f // This would come from playback history
+
+    override suspend fun getRepeatUsagePercentage(): Float = 0f // This would come from playback history
+
+    override suspend fun getAverageSessionDurationMinutes(): Double = 0.0 // This would come from session tracking
+
+    override suspend fun getSkipRatePercentage(): Float = 0f // This would come from playback history
+
+    // Update statistics methods
+    override suspend fun updateArtistStatistics() {
+        artistDao.updateStatistics()
     }
-    
-    override fun getAllAlbums(): Flow<List<Album>> {
-        return albumDao.getAllAlbums().map { entities ->
-            entities.map { it.toDomain() }
-        }
+
+    override suspend fun updateAlbumStatistics() {
+        albumDao.updateStatistics()
     }
-    
-    override suspend fun getAlbumById(id: Long): Album? = withContext(ioDispatcher) {
-        albumDao.getAlbumById(id)?.toDomain()
+
+    override suspend fun updateGenreStatistics() {
+        // Implementation for genre statistics
     }
-    
-    override fun getAlbumsByArtist(artistId: Long): Flow<List<Album>> {
-        return albumDao.getAlbumsByArtist(artistId).map { entities ->
-            entities.map { it.toDomain() }
-        }
-    }
-    
-    override fun searchAlbums(query: String): Flow<List<Album>> {
-        return albumDao.searchAlbums(query).map { entities ->
-            entities.map { it.toDomain() }
-        }
-    }
-    
-    override fun getAllArtists(): Flow<List<Artist>> {
-        return artistDao.getAllArtists().map { entities ->
-            entities.map { it.toDomain() }
-        }
-    }
-    
-    override suspend fun getArtistById(id: Long): Artist? = withContext(ioDispatcher) {
-        artistDao.getArtistById(id)?.toDomain()
-    }
-    
-    override fun searchArtists(query: String): Flow<List<Artist>> {
-        return artistDao.searchArtists(query).map { entities ->
-            entities.map { it.toDomain() }
-        }
-    }
-    
-    override suspend fun updatePlayCount(songId: Long) = withContext(ioDispatcher) {
-        songDao.incrementPlayCount(songId)
-    }
-    
-    override suspend fun scanMediaLibrary() = withContext(ioDispatcher) {
-        mediaScanner.performFullScan()
-    }
-    
-    override suspend fun incrementalScan() = withContext(ioDispatcher) {
-        mediaScanner.performIncrementalScan()
-    }
-    
-    override fun getScanProgress(): Flow<MediaScanner.ScanProgress> {
-        return mediaScanner.scanProgress
-    }
-    
-    override fun getScanComplete(): Flow<MediaScanner.ScanResult> {
-        return mediaScanner.scanComplete
-    }
-    
-    override suspend fun getSongCount(): Int = withContext(ioDispatcher) {
-        songDao.getSongCount()
-    }
-    
-    override suspend fun getAlbumCount(): Int = withContext(ioDispatcher) {
-        albumDao.getAlbumCount()
-    }
-    
-    override suspend fun getArtistCount(): Int = withContext(ioDispatcher) {
-        artistDao.getArtistCount()
-    }
-    
-    override suspend fun getTotalDuration(): Long = withContext(ioDispatcher) {
-        songDao.getTotalDuration()
-    }
-    
-    override fun getSongsByYear(year: Int): Flow<List<Song>> {
-        return songDao.getSongsByYear(year).map { entities ->
-            entities.map { it.toDomain() }
-        }
-    }
-    
-    override fun getAlbumsByYear(year: Int): Flow<List<Album>> {
-        return albumDao.getAlbumsByYear(year).map { entities ->
-            entities.map { it.toDomain() }
-        }
-    }
-    
-    override suspend fun getAllYears(): List<Int> = withContext(ioDispatcher) {
-        songDao.getAllYears()
-    }
+
+    // Existing implementations continue...
+    override suspend fun insertSong(song: Song) = songDao.insertSong(song.toEntity())
+    override suspend fun updateSong(song: Song) = songDao.updateSong(song.toEntity())
+    override suspend fun deleteSongByPath(path: String) = songDao.deleteSongByPath(path)
+    override suspend fun insertArtist(artist: Artist) = artistDao.insertArtist(artist.toEntity())
+    override suspend fun insertAlbum(album: Album) = albumDao.insertAlbum(album.toEntity())
+    override suspend fun getArtistByName(name: String): Artist? = artistDao.getArtistByName(name)?.toDomain()
+    override suspend fun getAlbumByNameAndArtist(name: String, artist: String): Album? =
+        albumDao.getAlbumByNameAndArtist(name, artist)?.toDomain()
 }

@@ -11,7 +11,7 @@ data class Song(
     val artist: String,
     val album: String,
     val duration: Long,
-    val  String, // File path
+    val path: String, // File path
     val dateAdded: Long,
     val albumId: Long,
     val artistId: Long,
@@ -37,8 +37,8 @@ data class Song(
         get() = if (album.isBlank() || album == "Unknown Album") "Unknown Album" else album
     
     val isValidFile: Boolean
-        get() = data.isNotBlank() && java.io.File(data).exists()
-    
+        get() = path.isNotBlank() && java.io.File(path).exists()
+
     private fun formatDuration(durationMs: Long): String {
         val minutes = (durationMs / 1000) / 60
         val seconds = (durationMs / 1000) % 60
@@ -65,7 +65,7 @@ data class Song(
             artist = "",
             album = "",
             duration = 0,
-            data = "",
+            path = "",
             dateAdded = 0,
             albumId = -1,
             artistId = -1,

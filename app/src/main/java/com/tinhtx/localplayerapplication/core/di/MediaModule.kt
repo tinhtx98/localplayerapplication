@@ -1,8 +1,10 @@
 package com.tinhtx.localplayerapplication.core.di
 
 import android.content.Context
+import androidx.annotation.OptIn
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
+import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import androidx.media3.session.MediaSession
@@ -25,7 +27,8 @@ object MediaModule {
             .setUsage(C.USAGE_MEDIA)
             .build()
     }
-    
+
+    @OptIn(UnstableApi::class)
     @Provides
     @ServiceScoped
     fun provideExoPlayer(
