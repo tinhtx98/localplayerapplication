@@ -2,45 +2,45 @@
 <resources xmlns:tools="http://schemas.android.com/tools">
     
     <!-- Base Application Theme (Dark) -->
-    <style name="Base.Theme.LocalPlayerApplication" parent="Theme.Material3.DayNight">
+    <style name="Base.Theme.LocalPlayerApplication" parent="Theme.Material3.Dark">
         <!-- Primary colors -->
-        <item name="colorPrimary">@color/primary</item>
+        <item name="colorPrimary">@color/primary_light</item>
         <item name="colorOnPrimary">@color/on_primary</item>
-        <item name="colorPrimaryContainer">@color/primary_light</item>
+        <item name="colorPrimaryContainer">@color/primary_dark</item>
         <item name="colorOnPrimaryContainer">@color/on_primary</item>
-        
+
         <!-- Secondary colors -->
-        <item name="colorSecondary">@color/secondary</item>
+        <item name="colorSecondary">@color/secondary_light</item>
         <item name="colorOnSecondary">@color/on_secondary</item>
-        <item name="colorSecondaryContainer">@color/secondary_light</item>
+        <item name="colorSecondaryContainer">@color/secondary_dark</item>
         <item name="colorOnSecondaryContainer">@color/on_secondary</item>
-        
+
         <!-- Surface colors -->
-        <item name="colorSurface">@color/surface</item>
-        <item name="colorOnSurface">@color/on_surface</item>
-        <item name="colorSurfaceVariant">@color/surface_variant</item>
-        <item name="colorOnSurfaceVariant">@color/on_surface_variant</item>
-        
+        <item name="colorSurface">@color/surface_dark</item>
+        <item name="colorOnSurface">@color/on_surface_dark</item>
+        <item name="colorSurfaceVariant">@color/surface_variant_dark</item>
+        <item name="colorOnSurfaceVariant">@color/on_surface_variant_dark</item>
+
         <!-- Background colors -->
-        <item name="android:colorBackground">@color/background</item>
-        <item name="colorOnBackground">@color/on_background</item>
-        
+        <item name="android:colorBackground">@color/background_dark</item>
+        <item name="colorOnBackground">@color/on_background_dark</item>
+
         <!-- Error colors -->
-        <item name="colorError">@color/error</item>
+        <item name="colorError">@color/error_dark</item>
         <item name="colorOnError">@color/on_error</item>
-        <item name="colorErrorContainer">@color/error</item>
+        <item name="colorErrorContainer">@color/error_dark</item>
         <item name="colorOnErrorContainer">@color/on_error</item>
-        
-        <!-- Outline colors -->
-        <item name="colorOutline">@color/border</item>
-        <item name="colorOutlineVariant">@color/divider</item>
-        
+
+        <!-- Additional Material 3 colors -->
+        <item name="colorOutline">@color/on_surface_variant_dark</item>
+        <item name="colorOutlineVariant">@color/surface_variant_dark</item>
+
         <!-- Status bar -->
-        <item name="android:statusBarColor">@color/background</item>
+        <item name="android:statusBarColor">@color/background_dark</item>
         <item name="android:windowLightStatusBar">false</item>
         
         <!-- Navigation bar -->
-        <item name="android:navigationBarColor">@color/surface</item>
+        <item name="android:navigationBarColor">@color/surface_dark</item>
         <item name="android:windowLightNavigationBar">false</item>
         
         <!-- Window flags -->
@@ -49,17 +49,5 @@
     
     <!-- Main Application Theme (Dark) -->
     <style name="Theme.LocalPlayerApplication" parent="Base.Theme.LocalPlayerApplication" />
-    
-    <!-- Player Theme (Full Screen Dark) -->
-    <style name="Theme.LocalPlayerApplication.Player" parent="Theme.LocalPlayerApplication">
-        <item name="android:statusBarColor">@android:color/transparent</item>
-        <item name="android:navigationBarColor">@android:color/transparent</item>
-        <item name="android:windowTranslucentStatus">true</item>
-        <item name="android:windowTranslucentNavigation">true</item>
-        <item name="android:windowDrawsSystemBarBackgrounds">true</item>
-        <item name="android:windowLayoutInDisplayCutoutMode" tools:targetApi="p">shortEdges</item>
-        <item name="android:windowLightStatusBar">false</item>
-        <item name="android:windowLightNavigationBar">false</item>
-    </style>
     
 </resources>

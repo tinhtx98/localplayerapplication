@@ -245,9 +245,9 @@
     <string name="time_seconds">%d sec</string>
     <string name="time_minutes">%d min</string>
     <string name="time_hours">%d hr</string>
-    <string name="time_minutes_seconds">%d:%02d</string>
-    <string name="time_hours_minutes_seconds">%d:%02d:%02d</string>
-    
+    <string name="time_minutes_seconds" formatted="false">%1$d:%2$02d</string>
+    <string name="time_hours_minutes_seconds" formatted="false">%1$d:%2$02d:%3$02d</string>
+
     <!-- Plurals -->
     <plurals name="songs_count">
         <item quantity="one">%d song</item>

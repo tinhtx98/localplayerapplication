@@ -67,7 +67,10 @@ dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.activity.compose)
-    
+
+    // Material Design components (needed for Material3 themes)
+    implementation("com.google.android.material:material:1.11.0")
+
     // Compose BOM - ensures all compose dependencies use compatible versions
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.compose.ui)
@@ -84,17 +87,26 @@ dependencies {
     
     // Hilt Dependency Injection
     implementation(libs.hilt.android)
-    ksp(libs.hilt.android.compiler) // Using KSP instead of kapt
+    ksp(libs.hilt.android.compiler)
     implementation(libs.androidx.hilt.navigation.compose)
     
+    // Hilt for WorkManager
+    implementation("androidx.hilt:hilt-work:1.1.0")
+
     // Room Database
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.room.ktx)
-    ksp(libs.androidx.room.compiler) // Using KSP instead of kapt
-    
+    ksp(libs.androidx.room.compiler)
+
     // DataStore for preferences
     implementation(libs.androidx.datastore.preferences)
     
+    // WorkManager for background tasks
+    implementation("androidx.work:work-runtime-ktx:2.9.0")
+
+    // Gson for JSON parsing
+    implementation("com.google.code.gson:gson:2.10.1")
+
     // Media3 for audio playback
     implementation(libs.androidx.media3.exoplayer)
     implementation(libs.androidx.media3.session)
@@ -123,4 +135,12 @@ dependencies {
     // Debug dependencies
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
+
+    // Timber - Logging library
+    implementation(libs.timber)
+
+    // Gson - JSON parsing library
+    implementation(libs.gson)
+
+    implementation(libs.androidx.media)
 }
